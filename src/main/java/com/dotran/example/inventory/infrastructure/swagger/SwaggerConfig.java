@@ -20,8 +20,8 @@ public class SwaggerConfig {
 
         return new OpenAPI()
                 .info(new Info()
-                        .title("Store Service API")
-                        .description("Store Management APIs")
+                        .title("Inventory Service API")
+                        .description("Inventory Management APIs")
                         .version("v1")
                         .contact(new Contact()
                                 .name("Do Tran"))
@@ -29,7 +29,7 @@ public class SwaggerConfig {
                                 .name("Apache 2.0")))
                 .servers(List.of(
                         new Server()
-                                .url("http://localhost:8048")
+                                .url("http://localhost:8058")
                                 .description("Local"),
                         new Server()
                                 .url("https://api.example.com")
@@ -43,7 +43,7 @@ public class SwaggerConfig {
     public GroupedOpenApi storeApi() {
         return GroupedOpenApi.builder()
                 .group("store")
-                .packagesToScan("com.dotran.example.store.infrastructure.rest")
+                .packagesToScan("com.dotran.example.inventory.infrastructure.rest")
                 .build();
     }
 }
