@@ -2,9 +2,11 @@ package com.dotran.example.inventory.common.mapper;
 
 import com.dotran.example.inventory.common.domain.valueobject.CategoryId;
 import com.dotran.example.inventory.common.domain.valueobject.CustomerId;
+import com.dotran.example.inventory.common.domain.valueobject.InventoryId;
 import com.dotran.example.inventory.common.domain.valueobject.ProductId;
 import com.dotran.example.inventory.common.domain.valueobject.ProductImageId;
-import com.dotran.example.inventory.common.domain.valueobject.ProductSkuId;
+import com.dotran.example.inventory.common.domain.valueobject.ProductSku;
+import com.dotran.example.inventory.common.domain.valueobject.ReferenceId;
 import com.dotran.example.inventory.common.domain.valueobject.StoreAvailabilityId;
 import com.dotran.example.inventory.common.domain.valueobject.StoreCollectionId;
 import com.dotran.example.inventory.common.domain.valueobject.StoreId;
@@ -27,9 +29,9 @@ public interface IdMapper {
         return id == null ? null : new StoreAvailabilityId(id);
     }
 
-    @Named("toProductSkuId")
-    default ProductSkuId toProductSkuId(UUID id) {
-        return id == null ? null : new ProductSkuId(id);
+    @Named("toProductSku")
+    default ProductSku toProductSku(String id) {
+        return id == null ? null : new ProductSku(id);
     }
 
     @Named("toProductImageId")
@@ -60,5 +62,15 @@ public interface IdMapper {
     @Named("toCustomerId")
     default CustomerId toCustomerId(UUID id) {
         return id == null ? null : new CustomerId(id);
+    }
+
+    @Named("toInventoryId")
+    default InventoryId toInventoryId(UUID id) {
+        return id == null ? null : new InventoryId(id);
+    }
+
+    @Named("toReferenceId")
+    default ReferenceId toReferenceId(UUID id) {
+        return id == null ? null : new ReferenceId(id);
     }
 }

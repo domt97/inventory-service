@@ -1,19 +1,15 @@
-package com.dotran.example.inventory.application.dto;
+package com.dotran.example.inventory.infrastructure.rest.dto.response;
 
 import com.dotran.example.inventory.domain.enums.InventoryStatus;
-import lombok.AllArgsConstructor;
 import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.Getter;
 
 import java.time.Instant;
 import java.util.UUID;
 
-@Data
+@Getter
 @Builder
-@NoArgsConstructor
-@AllArgsConstructor
-public class InventoryDetailDto {
+public class InventoryDetailResponse {
 
     private UUID id;
 

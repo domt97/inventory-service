@@ -41,8 +41,8 @@ public class InventoryEntity {
     @Column(name = "store_product_id", nullable = false)
     private UUID storeProductId;
 
-    @Column(name = "sku_id", nullable = false)
-    private UUID skuId;
+    @Column(name = "sku", nullable = false)
+    private String sku;
 
     @Column(nullable = false)
     private long quantity;
