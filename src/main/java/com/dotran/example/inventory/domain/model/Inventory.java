@@ -3,7 +3,7 @@ package com.dotran.example.inventory.domain.model;
 import com.dotran.example.inventory.common.domain.BaseDomain;
 import com.dotran.example.inventory.common.domain.valueobject.InventoryId;
 import com.dotran.example.inventory.common.domain.valueobject.ProductId;
-import com.dotran.example.inventory.common.domain.valueobject.ProductSkuId;
+import com.dotran.example.inventory.common.domain.valueobject.ProductSku;
 import com.dotran.example.inventory.common.domain.valueobject.StoreId;
 import com.dotran.example.inventory.common.domain.valueobject.TenantId;
 import com.dotran.example.inventory.domain.enums.InventoryStatus;
@@ -14,6 +14,8 @@ import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.experimental.SuperBuilder;
 
+import java.time.Instant;
+
 @Getter
 @SuperBuilder
 @EqualsAndHashCode(callSuper = true)
@@ -23,12 +25,22 @@ public class Inventory extends BaseDomain<InventoryId> {
     private StoreId storeId;
 
     private ProductId productId;
-    private ProductSkuId skuId;
+    private ProductSku sku;
 
     private long quantity;
     private long reservedQuantity;
 
     private InventoryStatus status;
+
+    private Instant createdAt;
+    private Instant updatedAt;
+
+    public void init() {
+        this.quantity = 0;
+        this.reservedQuantity = 0;
+        this.status = InventoryStatus.ACTIVE;
+        this.createdAt = this.updatedAt = Instant.now();
+    }
 
     public long availableQuantity() {
         return quantity - reservedQuantity;

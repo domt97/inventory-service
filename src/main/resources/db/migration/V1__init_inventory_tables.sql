@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS inventories
     store_id           UUID NOT NULL,
 
     store_product_id   UUID NOT NULL,
-    sku_id             UUID NOT NULL,
+    sku                VARCHAR(50) NOT NULL,
 
     quantity           BIGINT NOT NULL DEFAULT 0,
     reserved_quantity  BIGINT NOT NULL DEFAULT 0,
@@ -17,14 +17,14 @@ CREATE TABLE IF NOT EXISTS inventories
     updated_at         TIMESTAMP NOT NULL,
 
     CONSTRAINT uk_inventory_store_sku
-        UNIQUE (store_id, sku_id)
+        UNIQUE (store_id, sku)
 );
 
 CREATE INDEX idx_inventory_store
     ON inventories (store_id);
 
 CREATE INDEX idx_inventory_sku
-    ON inventories (sku_id);
+    ON inventories (sku);
 
 CREATE INDEX idx_inventory_store_product
     ON inventories (store_id, store_product_id);
