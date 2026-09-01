@@ -29,6 +29,9 @@ dependencies {
 	implementation 'org.projectlombok:lombok'
 	implementation("org.apache.commons:commons-lang3:3.18.0")
 
+	// Kafka
+	implementation 'org.springframework.kafka:spring-kafka'
+
 	// AWS
 	implementation platform("software.amazon.awssdk:bom:2.31.76")
 

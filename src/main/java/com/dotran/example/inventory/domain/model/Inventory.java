@@ -3,7 +3,7 @@ package com.dotran.example.inventory.domain.model;
 import com.dotran.example.inventory.common.domain.BaseDomain;
 import com.dotran.example.inventory.common.domain.valueobject.InventoryId;
 import com.dotran.example.inventory.common.domain.valueobject.ProductId;
-import com.dotran.example.inventory.common.domain.valueobject.ProductSku;
+import com.dotran.example.inventory.common.domain.valueobject.SKU;
 import com.dotran.example.inventory.common.domain.valueobject.StoreId;
 import com.dotran.example.inventory.common.domain.valueobject.TenantId;
 import com.dotran.example.inventory.domain.enums.InventoryStatus;
@@ -25,7 +25,7 @@ public class Inventory extends BaseDomain<InventoryId> {
     private StoreId storeId;
 
     private ProductId productId;
-    private ProductSku sku;
+    private SKU sku;
 
     private long quantity;
     private long reservedQuantity;

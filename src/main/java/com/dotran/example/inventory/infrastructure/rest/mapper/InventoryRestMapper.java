@@ -20,7 +20,7 @@ public abstract class InventoryRestMapper {
     @Mapping(target = "tenantId", expression = "java(idMapper.toTenantId(request.getTenantId()))")
     @Mapping(target = "storeId", expression = "java(idMapper.toStoreId(request.getStoreId()))")
     @Mapping(target = "productId", expression = "java(idMapper.toProductId(request.getProductId()))")
-    @Mapping(target = "sku", expression = "java(idMapper.toProductSku(request.getSku()))")
+    @Mapping(target = "sku", expression = "java(idMapper.toSKU(request.getSku()))")
     public abstract CreateInventoryCmd toCreateInventoryCmd(CreateInventoryRequest request);
 
     public abstract InventoryDetailResponse toInventoryDetailResponse(InventoryDetailDto inventoryDetailDto);
