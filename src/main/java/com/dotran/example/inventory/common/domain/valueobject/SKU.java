@@ -1,15 +1,18 @@
 package com.dotran.example.inventory.common.domain.valueobject;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Getter;
 
 @Getter
 public class SKU extends BaseId<String> {
 
-    public SKU(String value) {
-        super(value);
-    }
-
     public static SKU of(String value) {
         return new SKU(value);
+    }
+
+    @JsonCreator
+    public SKU(@JsonProperty("value") String value) {
+        super(value);
     }
 }

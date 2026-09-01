@@ -5,8 +5,8 @@ import com.dotran.example.inventory.common.domain.valueobject.CustomerId;
 import com.dotran.example.inventory.common.domain.valueobject.InventoryId;
 import com.dotran.example.inventory.common.domain.valueobject.ProductId;
 import com.dotran.example.inventory.common.domain.valueobject.ProductImageId;
-import com.dotran.example.inventory.common.domain.valueobject.ProductSku;
 import com.dotran.example.inventory.common.domain.valueobject.ReferenceId;
+import com.dotran.example.inventory.common.domain.valueobject.SKU;
 import com.dotran.example.inventory.common.domain.valueobject.StoreAvailabilityId;
 import com.dotran.example.inventory.common.domain.valueobject.StoreCollectionId;
 import com.dotran.example.inventory.common.domain.valueobject.StoreId;
@@ -29,9 +29,9 @@ public interface IdMapper {
         return id == null ? null : new StoreAvailabilityId(id);
     }
 
-    @Named("toProductSku")
-    default ProductSku toProductSku(String id) {
-        return id == null ? null : new ProductSku(id);
+    @Named("toSKU")
+    default SKU toSKU(String id) {
+        return id == null ? null : new SKU(id);
     }
 
     @Named("toProductImageId")
