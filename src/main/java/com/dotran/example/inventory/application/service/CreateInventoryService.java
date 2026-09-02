@@ -23,7 +23,7 @@ public class CreateInventoryService implements CreateInventoryUseCase {
         Inventory inventory = mapper.fromCreatedCmd(cmd);
         inventory.init();
 
-        Inventory savedInventory = repository.create(inventory);
+        Inventory savedInventory = repository.save(inventory);
 
         return mapper.toDetailDto(savedInventory);
     }

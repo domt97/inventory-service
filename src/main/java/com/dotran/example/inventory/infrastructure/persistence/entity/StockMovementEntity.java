@@ -36,7 +36,7 @@ public class StockMovementEntity {
             allocationSize = 1
     )
     @EqualsAndHashCode.Include
-    private UUID id;
+    private Long id;
 
     @Column(name = "tenant_id", nullable = false)
     private UUID tenantId;
@@ -51,10 +51,6 @@ public class StockMovementEntity {
     @Column(nullable = false, length = 30)
     private StockMovementType type;
 
-    /**
-     * Positive = stock in
-     * Negative = stock out
-     */
     @Column(nullable = false)
     private long quantity;
 

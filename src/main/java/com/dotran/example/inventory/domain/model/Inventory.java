@@ -7,6 +7,7 @@ import com.dotran.example.inventory.common.domain.valueobject.SKU;
 import com.dotran.example.inventory.common.domain.valueobject.StoreId;
 import com.dotran.example.inventory.common.domain.valueobject.TenantId;
 import com.dotran.example.inventory.domain.enums.InventoryStatus;
+import com.dotran.example.inventory.domain.enums.StockMovementType;
 import com.dotran.example.inventory.domain.exception.InsufficientStockException;
 import com.dotran.example.inventory.domain.exception.InvalidQuantityException;
 import com.dotran.example.inventory.domain.exception.InvalidReservationException;
@@ -27,8 +28,8 @@ public class Inventory extends BaseDomain<InventoryId> {
     private ProductId productId;
     private SKU sku;
 
-    private long quantity;
-    private long reservedQuantity;
+    private Long quantity;
+    private Long reservedQuantity;
 
     private InventoryStatus status;
 
@@ -36,8 +37,8 @@ public class Inventory extends BaseDomain<InventoryId> {
     private Instant updatedAt;
 
     public void init() {
-        this.quantity = 0;
-        this.reservedQuantity = 0;
+        this.quantity = 0L;
+        this.reservedQuantity = 0L;
         this.status = InventoryStatus.ACTIVE;
         this.createdAt = this.updatedAt = Instant.now();
     }
@@ -46,13 +47,13 @@ public class Inventory extends BaseDomain<InventoryId> {
         return quantity - reservedQuantity;
     }
 
-    public void receive(long quantity) {
+    public void receive(Long quantity) {
         validatePositive(quantity);
 
         this.quantity += quantity;
     }
 
-    public void reserve(long quantity) {
+    public void reserve(Long quantity) {
 
         validatePositive(quantity);
 
@@ -63,7 +64,7 @@ public class Inventory extends BaseDomain<InventoryId> {
         this.reservedQuantity += quantity;
     }
 
-    public void release(long quantity) {
+    public void release(Long quantity) {
 
         validatePositive(quantity);
 
@@ -74,7 +75,7 @@ public class Inventory extends BaseDomain<InventoryId> {
         this.reservedQuantity -= quantity;
     }
 
-    public void confirmReservation(long quantity) {
+    public void confirmReservation(Long quantity) {
 
         validatePositive(quantity);
 
@@ -86,15 +87,20 @@ public class Inventory extends BaseDomain<InventoryId> {
         this.quantity -= quantity;
     }
 
-    public void adjust(long quantity) {
-        if (this.quantity + quantity < this.reservedQuantity) {
+    public void adjust(StockMovementType stockMovementType, Long quantity) {
+        validatePositive(quantity);
+
+        Long adjustQuantity = stockMovementType.isStockIn() ? quantity : -quantity;
+
+        if (this.quantity + adjustQuantity < this.reservedQuantity) {
             throw new InsufficientStockException();
         }
 
-        this.quantity += quantity;
+        this.quantity += adjustQuantity;
+        this.updatedAt = Instant.now();
     }
 
-    private void validatePositive(long quantity) {
+    private void validatePositive(Long quantity) {
         if (quantity <= 0) {
             throw new InvalidQuantityException();
         }

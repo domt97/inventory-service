@@ -7,6 +7,7 @@ import com.dotran.example.inventory.common.domain.valueobject.ProductId;
 import com.dotran.example.inventory.common.domain.valueobject.ProductImageId;
 import com.dotran.example.inventory.common.domain.valueobject.ReferenceId;
 import com.dotran.example.inventory.common.domain.valueobject.SKU;
+import com.dotran.example.inventory.common.domain.valueobject.StockMovementId;
 import com.dotran.example.inventory.common.domain.valueobject.StoreAvailabilityId;
 import com.dotran.example.inventory.common.domain.valueobject.StoreCollectionId;
 import com.dotran.example.inventory.common.domain.valueobject.StoreId;
@@ -67,6 +68,11 @@ public interface IdMapper {
     @Named("toInventoryId")
     default InventoryId toInventoryId(UUID id) {
         return id == null ? null : new InventoryId(id);
+    }
+
+    @Named("toStockMovementId")
+    default StockMovementId toStockMovementId(Long id) {
+        return id == null ? null : new StockMovementId(id);
     }
 
     @Named("toReferenceId")
