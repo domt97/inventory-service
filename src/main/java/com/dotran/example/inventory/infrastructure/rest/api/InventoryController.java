@@ -5,7 +5,10 @@ import com.dotran.example.inventory.application.command.CreateInventoryCmd;
 import com.dotran.example.inventory.application.dto.InventoryDetailDto;
 import com.dotran.example.inventory.application.usecase.inventory.AdjustStockUseCase;
 import com.dotran.example.inventory.application.usecase.inventory.CreateInventoryUseCase;
+import com.dotran.example.inventory.application.usecase.inventory.LoadInventoryUseCase;
 import com.dotran.example.inventory.common.annotation.WebAdapter;
+import com.dotran.example.inventory.common.domain.valueobject.InventoryId;
+import com.dotran.example.inventory.common.domain.valueobject.ProductId;
 import com.dotran.example.inventory.infrastructure.rest.dto.request.AdjustStockRequest;
 import com.dotran.example.inventory.infrastructure.rest.dto.request.CreateInventoryRequest;
 import com.dotran.example.inventory.infrastructure.rest.dto.response.InventoryDetailResponse;
@@ -20,6 +23,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -27,6 +31,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
 import java.util.UUID;
 
 @Tag(name = "Inventory Management", description = "APIs for managing inventory lifecycle")
@@ -39,6 +44,7 @@ public class InventoryController {
 
     private final CreateInventoryUseCase createInventoryUseCase;
     private final AdjustStockUseCase adjustStockUseCase;
+    private final LoadInventoryUseCase loadInventoryUseCase;
     private final InventoryRestMapper restMapper;
 
     @Operation(summary = "Create a new inventory", description = "Creates a new inventory for the specified store product sku")
@@ -50,12 +56,14 @@ public class InventoryController {
     })
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public InventoryDetailResponse create(
+    public List<InventoryDetailResponse> create(
             @RequestBody @Valid CreateInventoryRequest createInventoryRequest) {
         CreateInventoryCmd createInventoryCmd = restMapper.toCreateInventoryCmd(createInventoryRequest);
-        InventoryDetailDto inventoryDetailDto = createInventoryUseCase.create(createInventoryCmd);
+        List<InventoryDetailDto> inventoryDetailDtoList = createInventoryUseCase.create(createInventoryCmd);
 
-        return restMapper.toInventoryDetailResponse(inventoryDetailDto);
+        return inventoryDetailDtoList.stream()
+                .map(restMapper::toInventoryDetailResponse)
+                .toList();
     }
 
     @Operation(summary = "Adjust stock", description = "Adjusts the stock for the specified inventory")
@@ -74,5 +82,31 @@ public class InventoryController {
         InventoryDetailDto inventoryDetailDto = adjustStockUseCase.adjust(adjustStockCmd);
 
         return restMapper.toInventoryDetailResponse(inventoryDetailDto);
+    }
+
+    @Operation(summary = "Get inventory", description = "Retrieves the inventory for the specified store product sku")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Inventory retrieved successfully",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = InventoryDetailResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Invalid request body", content = @Content),
+            @ApiResponse(responseCode = "404", description = "Inventory not found", content = @Content)
+    })
+    @GetMapping("/{inventoryId}")
+    @ResponseStatus(HttpStatus.OK)
+    public InventoryDetailResponse getInventory(@PathVariable UUID inventoryId) {
+        return restMapper.toInventoryDetailResponse(loadInventoryUseCase.loadById(InventoryId.of(inventoryId)));
+    }
+
+    @Operation(summary = "Get inventory", description = "Retrieves the inventory for the specified store product sku")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Inventory retrieved successfully",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = InventoryDetailResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Invalid request body", content = @Content),
+            @ApiResponse(responseCode = "404", description = "Inventory not found", content = @Content)
+    })
+    @GetMapping("/products/{productId}")
+    @ResponseStatus(HttpStatus.OK)
+    public List<InventoryDetailResponse> getAllProductInventory(@PathVariable UUID productId) {
+        return restMapper.toInventoryDetailResponseList(loadInventoryUseCase.loadByProductId(ProductId.of(productId)));
     }
 }

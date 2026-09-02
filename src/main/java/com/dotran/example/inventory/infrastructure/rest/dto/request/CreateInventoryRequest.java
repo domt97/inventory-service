@@ -6,6 +6,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.List;
 import java.util.UUID;
 
 @Data
@@ -24,5 +25,5 @@ public class CreateInventoryRequest {
     private UUID productId;
 
     @NotNull
-    private String sku;
+    private List<String> skus;
 }

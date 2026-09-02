@@ -15,6 +15,7 @@ import com.dotran.example.inventory.common.domain.valueobject.TenantId;
 import org.mapstruct.Mapper;
 import org.mapstruct.Named;
 
+import java.util.List;
 import java.util.UUID;
 
 @Mapper(componentModel = "spring")
@@ -33,6 +34,11 @@ public interface IdMapper {
     @Named("toSKU")
     default SKU toSKU(String id) {
         return id == null ? null : new SKU(id);
+    }
+
+    @Named("toSKUList")
+    default List<SKU> toSKUList(List<String> skus) {
+        return skus == null ? null : skus.stream().map(this::toSKU).toList();
     }
 
     @Named("toProductImageId")

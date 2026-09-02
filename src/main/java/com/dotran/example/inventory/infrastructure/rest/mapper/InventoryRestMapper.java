@@ -11,6 +11,7 @@ import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.springframework.beans.factory.annotation.Autowired;
 
+import java.util.List;
 import java.util.UUID;
 
 @Mapper(componentModel = "spring", uses = {
@@ -24,7 +25,7 @@ public abstract class InventoryRestMapper {
     @Mapping(target = "tenantId", expression = "java(idMapper.toTenantId(request.getTenantId()))")
     @Mapping(target = "storeId", expression = "java(idMapper.toStoreId(request.getStoreId()))")
     @Mapping(target = "productId", expression = "java(idMapper.toProductId(request.getProductId()))")
-    @Mapping(target = "sku", expression = "java(idMapper.toSKU(request.getSku()))")
+    @Mapping(target = "skus", expression = "java(idMapper.toSKUList(request.getSkus()))")
     public abstract CreateInventoryCmd toCreateInventoryCmd(CreateInventoryRequest request);
 
     @Mapping(target = "tenantId", expression = "java(idMapper.toTenantId(request.getTenantId()))")
@@ -36,4 +37,6 @@ public abstract class InventoryRestMapper {
     public abstract AdjustStockCmd toAdjustStockCmd(UUID inventoryId, AdjustStockRequest request);
 
     public abstract InventoryDetailResponse toInventoryDetailResponse(InventoryDetailDto inventoryDetailDto);
+
+    public abstract List<InventoryDetailResponse> toInventoryDetailResponseList(List<InventoryDetailDto> inventoryDetailDtoList);
 }
