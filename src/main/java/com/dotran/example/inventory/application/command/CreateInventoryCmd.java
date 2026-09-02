@@ -7,6 +7,8 @@ import com.dotran.example.inventory.common.domain.valueobject.TenantId;
 import lombok.Builder;
 import lombok.Data;
 
+import java.util.List;
+
 @Data
 @Builder
 public class CreateInventoryCmd {
@@ -14,5 +16,5 @@ public class CreateInventoryCmd {
     private TenantId tenantId;
     private StoreId storeId;
     private ProductId productId;
-    private SKU sku;
+    private List<SKU> skus;
 }

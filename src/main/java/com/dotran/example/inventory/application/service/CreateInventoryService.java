@@ -6,9 +6,13 @@ import com.dotran.example.inventory.application.mapper.InventoryMapper;
 import com.dotran.example.inventory.application.repository.InventoryRepository;
 import com.dotran.example.inventory.application.usecase.inventory.CreateInventoryUseCase;
 import com.dotran.example.inventory.common.annotation.UseCase;
+import com.dotran.example.inventory.common.domain.valueobject.SKU;
 import com.dotran.example.inventory.domain.model.Inventory;
 import lombok.RequiredArgsConstructor;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.ArrayList;
+import java.util.List;
 
 @UseCase
 @RequiredArgsConstructor
@@ -19,12 +23,24 @@ public class CreateInventoryService implements CreateInventoryUseCase {
 
     @Override
     @Transactional
-    public InventoryDetailDto create(CreateInventoryCmd cmd) {
-        Inventory inventory = mapper.fromCreatedCmd(cmd);
-        inventory.init();
+    public List<InventoryDetailDto> create(CreateInventoryCmd cmd) {
+        List<Inventory> inventoryList = new ArrayList<>();
+        for (SKU sku : cmd.getSkus()) {
+            Inventory inventory = Inventory.builder()
+                    .tenantId(cmd.getTenantId())
+                    .storeId(cmd.getStoreId())
+                    .productId(cmd.getProductId())
+                    .sku(sku)
+                    .build();
+            inventory.init();
 
-        Inventory savedInventory = repository.save(inventory);
+            inventoryList.add(inventory);
+        }
 
-        return mapper.toDetailDto(savedInventory);
+        List<Inventory> savedInventoryList = repository.saveList(inventoryList);
+
+        return savedInventoryList.stream()
+                .map(mapper::toDetailDto)
+                .toList();
     }
 }

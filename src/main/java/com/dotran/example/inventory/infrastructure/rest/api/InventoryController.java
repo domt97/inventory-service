@@ -27,6 +27,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
 import java.util.UUID;
 
 @Tag(name = "Inventory Management", description = "APIs for managing inventory lifecycle")
@@ -50,12 +51,14 @@ public class InventoryController {
     })
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public InventoryDetailResponse create(
+    public List<InventoryDetailResponse> create(
             @RequestBody @Valid CreateInventoryRequest createInventoryRequest) {
         CreateInventoryCmd createInventoryCmd = restMapper.toCreateInventoryCmd(createInventoryRequest);
-        InventoryDetailDto inventoryDetailDto = createInventoryUseCase.create(createInventoryCmd);
+        List<InventoryDetailDto> inventoryDetailDtoList = createInventoryUseCase.create(createInventoryCmd);
 
-        return restMapper.toInventoryDetailResponse(inventoryDetailDto);
+        return inventoryDetailDtoList.stream()
+                .map(restMapper::toInventoryDetailResponse)
+                .toList();
     }
 
     @Operation(summary = "Adjust stock", description = "Adjusts the stock for the specified inventory")
