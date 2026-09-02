@@ -10,6 +10,8 @@ import com.dotran.example.inventory.infrastructure.persistence.entity.InventoryE
 import com.dotran.example.inventory.infrastructure.persistence.jpa.SpringDataInventoryRepository;
 import lombok.RequiredArgsConstructor;
 
+import java.util.Optional;
+
 @PersistenceAdapter
 @RequiredArgsConstructor
 public class InventoryPersistenceAdapter implements InventoryRepository {
@@ -19,7 +21,7 @@ public class InventoryPersistenceAdapter implements InventoryRepository {
 
 
     @Override
-    public Inventory create(Inventory inventory) {
+    public Inventory save(Inventory inventory) {
         InventoryEntity entity = mapper.fromInventory(inventory);
 
         InventoryEntity savedInventory = springDataInventoryRepository.saveAndFlush(entity);
@@ -28,10 +30,9 @@ public class InventoryPersistenceAdapter implements InventoryRepository {
     }
 
     @Override
-    public Inventory getById(InventoryId inventoryId) {
+    public Optional<Inventory> getById(InventoryId inventoryId) {
         return springDataInventoryRepository
                 .findById(inventoryId.getValue())
-                .map(mapper::fromEntity)
-                .orElseThrow(() -> new NotFoundException("Inventory not found"));
+                .map(mapper::fromEntity);
     }
 }

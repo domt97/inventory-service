@@ -1,6 +1,8 @@
 package com.dotran.example.inventory.infrastructure.rest.exception;
 
 import com.dotran.example.inventory.domain.exception.BusinessException;
+import com.dotran.example.inventory.domain.exception.InsufficientStockException;
+import com.dotran.example.inventory.domain.exception.InvalidQuantityException;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
@@ -45,6 +47,32 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                 .error(ex.getMessage())
                 .timestamp(Instant.now())
                 .status(HttpStatus.UNPROCESSABLE_ENTITY.value())
+                .path(request.getRequestURI())
+                .build();
+    }
+
+    @ExceptionHandler(value = InsufficientStockException.class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    public ErrorResponse insufficientStockException(InsufficientStockException ex, HttpServletRequest request) {
+        this.logError(ex);
+
+        return ErrorResponse.builder()
+                .error(ex.getMessage())
+                .timestamp(Instant.now())
+                .status(HttpStatus.CONFLICT.value())
+                .path(request.getRequestURI())
+                .build();
+    }
+
+    @ExceptionHandler(value = InvalidQuantityException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ErrorResponse invalidQuantityException(InvalidQuantityException ex, HttpServletRequest request) {
+        this.logError(ex);
+
+        return ErrorResponse.builder()
+                .error(ex.getMessage())
+                .timestamp(Instant.now())
+                .status(HttpStatus.BAD_REQUEST.value())
                 .path(request.getRequestURI())
                 .build();
     }

@@ -25,11 +25,7 @@ public class StockMovement extends BaseDomain<StockMovementId> {
 
     private StockMovementType type;
 
-    /**
-     * Positive = stock added
-     * Negative = stock removed
-     */
-    private long quantity;
+    private Long quantity;
 
     private String referenceType;
     private ReferenceId referenceId;
@@ -37,4 +33,22 @@ public class StockMovement extends BaseDomain<StockMovementId> {
     private String reason;
 
     private Instant createdAt;
+
+    public static StockMovement newInstance(Inventory inventory, StockMovementType type, Long quantity, String reason) {
+        StockMovement stockMovement = StockMovement.builder()
+                .tenantId(inventory.getTenantId())
+                .storeId(inventory.getStoreId())
+                .inventoryId(inventory.getId())
+                .type(type)
+                .quantity(quantity)
+                .reason(reason)
+                .build();
+        stockMovement.newStockMovement();
+
+        return stockMovement;
+    }
+
+    public void newStockMovement() {
+        this.createdAt = Instant.now();
+    }
 }
