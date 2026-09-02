@@ -11,6 +11,7 @@ import com.dotran.example.inventory.common.exception.NotFoundException;
 import com.dotran.example.inventory.common.utils.CollectionUtils;
 import com.dotran.example.inventory.domain.model.Inventory;
 import lombok.RequiredArgsConstructor;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
@@ -22,6 +23,7 @@ public class LoadInventoryService implements LoadInventoryUseCase {
     private final InventoryMapper mapper;
 
     @Override
+    @Transactional
     public InventoryDetailDto loadById(InventoryId id) {
         Inventory inventory = repository.getById(id)
                 .orElseThrow(() -> new NotFoundException("Inventory not found"));
@@ -30,6 +32,7 @@ public class LoadInventoryService implements LoadInventoryUseCase {
     }
 
     @Override
+    @Transactional
     public List<InventoryDetailDto> loadByProductId(ProductId productId) {
         List<Inventory> inventories = repository.getByProductId(productId);
 
