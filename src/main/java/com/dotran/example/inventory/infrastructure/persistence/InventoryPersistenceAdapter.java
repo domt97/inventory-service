@@ -3,6 +3,7 @@ package com.dotran.example.inventory.infrastructure.persistence;
 import com.dotran.example.inventory.application.repository.InventoryRepository;
 import com.dotran.example.inventory.common.annotation.PersistenceAdapter;
 import com.dotran.example.inventory.common.domain.valueobject.InventoryId;
+import com.dotran.example.inventory.common.domain.valueobject.ProductId;
 import com.dotran.example.inventory.domain.model.Inventory;
 import com.dotran.example.inventory.infrastructure.mapper.InventoryPersistenceMapper;
 import com.dotran.example.inventory.infrastructure.persistence.entity.InventoryEntity;
@@ -51,5 +52,14 @@ public class InventoryPersistenceAdapter implements InventoryRepository {
         return springDataInventoryRepository
                 .findById(inventoryId.getValue())
                 .map(mapper::fromEntity);
+    }
+
+    @Override
+    public List<Inventory> getByProductId(ProductId productId) {
+        return springDataInventoryRepository
+                .findAllByStoreProductId(productId.getValue())
+                .stream()
+                .map(mapper::fromEntity)
+                .collect(Collectors.toList());
     }
 }

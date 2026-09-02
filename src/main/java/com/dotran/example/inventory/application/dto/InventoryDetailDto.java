@@ -21,9 +21,9 @@ public class InventoryDetailDto {
     private String sku;
     private UUID tenantId;
     private UUID storeId;
-    private int quantity;
-    private int reservedQuantity;
-    private int availableQuantity;
+    private Long quantity;
+    private Long reservedQuantity;
+    private Long availableQuantity;
 
     private InventoryStatus status;
 
