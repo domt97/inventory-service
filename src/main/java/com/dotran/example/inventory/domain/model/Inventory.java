@@ -11,6 +11,7 @@ import com.dotran.example.inventory.domain.enums.StockMovementType;
 import com.dotran.example.inventory.domain.exception.InsufficientStockException;
 import com.dotran.example.inventory.domain.exception.InvalidQuantityException;
 import com.dotran.example.inventory.domain.exception.InvalidReservationException;
+import com.dotran.example.inventory.domain.exception.ValidationException;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.experimental.SuperBuilder;
@@ -103,6 +104,12 @@ public class Inventory extends BaseDomain<InventoryId> {
     private void validatePositive(Long quantity) {
         if (quantity <= 0) {
             throw new InvalidQuantityException();
+        }
+    }
+
+    public void validateTenantAndStore(TenantId tenantId, StoreId storeId) {
+        if (!this.tenantId.equals(tenantId) || !this.storeId.equals(storeId)) {
+            throw new ValidationException("Inventory does not belong to the specified tenant or store");
         }
     }
 }

@@ -9,7 +9,6 @@ import com.dotran.example.inventory.application.repository.TenantRepository;
 import com.dotran.example.inventory.application.usecase.inventory.AdjustStockUseCase;
 import com.dotran.example.inventory.common.annotation.UseCase;
 import com.dotran.example.inventory.common.exception.NotFoundException;
-import com.dotran.example.inventory.domain.exception.ValidationException;
 import com.dotran.example.inventory.domain.model.Inventory;
 import com.dotran.example.inventory.domain.model.StockMovement;
 import com.dotran.example.inventory.domain.model.TenantInfo;
@@ -36,9 +35,7 @@ public class AdjustStockService implements AdjustStockUseCase {
         Inventory inventory = repository.getById(cmd.getInventoryId())
                 .orElseThrow(() -> new NotFoundException("Inventory not found"));
 
-        if (!inventory.getTenantId().equals(tenantInfo.getId()) || !inventory.getStoreId().equals(cmd.getStoreId())) {
-            throw new ValidationException("Inventory does not belong to the specified tenant or store");
-        }
+        inventory.validateTenantAndStore(tenantInfo.getId(), cmd.getStoreId());
 
         inventory.adjust(cmd.getMovementType(), cmd.getQuantity());
 
@@ -52,9 +49,9 @@ public class AdjustStockService implements AdjustStockUseCase {
         Inventory savedInventory = repository.save(inventory);
         StockMovement savedStockMovement = stockMovementRepository.create(newStockMovement);
 
-        log.info("Inventory updated: {}, type: {}, quantity: {}",
-                savedInventory.getId(), cmd.getMovementType(), cmd.getQuantity());
-        log.info("Stock movement created: {}", savedStockMovement.getId());
+        log.info("Inventory updated: id = {}, type: {}, quantity: {}",
+                savedInventory.getId().getValue(), cmd.getMovementType(), cmd.getQuantity());
+        log.info("Stock movement created: id = {}", savedStockMovement.getId().getValue());
 
         return inventoryMapper.toDetailDto(savedInventory);
     }
