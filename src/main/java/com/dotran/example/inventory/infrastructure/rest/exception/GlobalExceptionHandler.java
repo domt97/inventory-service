@@ -1,8 +1,10 @@
 package com.dotran.example.inventory.infrastructure.rest.exception;
 
+import com.dotran.example.inventory.common.exception.NotFoundException;
 import com.dotran.example.inventory.domain.exception.BusinessException;
 import com.dotran.example.inventory.domain.exception.InsufficientStockException;
 import com.dotran.example.inventory.domain.exception.InvalidQuantityException;
+import com.dotran.example.inventory.domain.exception.ValidationException;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
@@ -34,6 +36,32 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                 .error("Internal Server Error")
                 .timestamp(Instant.now())
                 .status(HttpStatus.INTERNAL_SERVER_ERROR.value())
+                .path(request.getRequestURI())
+                .build();
+    }
+
+    @ExceptionHandler(value = {NotFoundException.class})
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    public ErrorResponse notFoundException(NotFoundException ex, HttpServletRequest request) {
+        this.logError(ex);
+
+        return ErrorResponse.builder()
+                .error(ex.getMessage())
+                .timestamp(Instant.now())
+                .status(HttpStatus.NOT_FOUND.value())
+                .path(request.getRequestURI())
+                .build();
+    }
+
+    @ExceptionHandler(value = {ValidationException.class})
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ErrorResponse validationException(ValidationException ex, HttpServletRequest request) {
+        this.logError(ex);
+
+        return ErrorResponse.builder()
+                .error(ex.getMessage())
+                .timestamp(Instant.now())
+                .status(HttpStatus.BAD_REQUEST.value())
                 .path(request.getRequestURI())
                 .build();
     }
