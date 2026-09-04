@@ -37,7 +37,7 @@ public class CreateInventoryService implements CreateInventoryUseCase {
             inventoryList.add(inventory);
         }
 
-        List<Inventory> savedInventoryList = repository.saveList(inventoryList);
+        List<Inventory> savedInventoryList = repository.createList(inventoryList);
 
         return savedInventoryList.stream()
                 .map(mapper::toDetailDto)

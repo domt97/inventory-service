@@ -9,9 +9,11 @@ import java.util.Optional;
 
 public interface InventoryRepository {
 
-    Inventory save(Inventory inventory);
+    Inventory create(Inventory inventory);
 
-    List<Inventory> saveList(List<Inventory> inventories);
+    Inventory update(Inventory inventory);
+
+    List<Inventory> createList(List<Inventory> inventories);
 
     Optional<Inventory> getById(InventoryId inventoryId);
 

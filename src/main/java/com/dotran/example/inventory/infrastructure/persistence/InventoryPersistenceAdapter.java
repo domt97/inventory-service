@@ -4,6 +4,7 @@ import com.dotran.example.inventory.application.repository.InventoryRepository;
 import com.dotran.example.inventory.common.annotation.PersistenceAdapter;
 import com.dotran.example.inventory.common.domain.valueobject.InventoryId;
 import com.dotran.example.inventory.common.domain.valueobject.ProductId;
+import com.dotran.example.inventory.common.exception.NotFoundException;
 import com.dotran.example.inventory.domain.model.Inventory;
 import com.dotran.example.inventory.infrastructure.mapper.InventoryPersistenceMapper;
 import com.dotran.example.inventory.infrastructure.persistence.entity.InventoryEntity;
@@ -23,7 +24,7 @@ public class InventoryPersistenceAdapter implements InventoryRepository {
 
 
     @Override
-    public Inventory save(Inventory inventory) {
+    public Inventory create(Inventory inventory) {
         InventoryEntity entity = mapper.fromInventory(inventory);
 
         InventoryEntity savedInventory = springDataInventoryRepository.saveAndFlush(entity);
@@ -32,7 +33,19 @@ public class InventoryPersistenceAdapter implements InventoryRepository {
     }
 
     @Override
-    public List<Inventory> saveList(List<Inventory> inventories) {
+    public Inventory update(Inventory inventory) {
+        InventoryEntity inventoryEntity = springDataInventoryRepository
+                .findById(inventory.getId().getValue())
+                .orElseThrow(() -> new NotFoundException("Inventory not found"));
+
+        mapper.updateInventory(inventory, inventoryEntity);
+        InventoryEntity savedInventory = springDataInventoryRepository.saveAndFlush(inventoryEntity);
+
+        return mapper.fromEntity(savedInventory);
+    }
+
+    @Override
+    public List<Inventory> createList(List<Inventory> inventories) {
         List<InventoryEntity> inventoryEntityList = inventories
                 .stream()
                 .map(mapper::fromInventory)

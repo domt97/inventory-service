@@ -36,7 +36,7 @@ public class ReserveStockService implements ReserveStockUseCase {
         StockReservation stockReservation = stockReservationMapper.toDomain(reserveStockCmd);
         stockReservation.reserve();
 
-        inventoryRepository.save(inventory);
+        inventoryRepository.update(inventory);
         stockReservationRepository.create(stockReservation);
 
         log.info("Stock reserved successfully for inventory: {}, quantity: {}",
