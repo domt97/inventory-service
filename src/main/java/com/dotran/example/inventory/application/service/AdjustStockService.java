@@ -46,7 +46,7 @@ public class AdjustStockService implements AdjustStockUseCase {
                 cmd.getReason()
         );
 
-        Inventory savedInventory = repository.save(inventory);
+        Inventory savedInventory = repository.update(inventory);
         StockMovement savedStockMovement = stockMovementRepository.create(newStockMovement);
 
         log.info("Inventory updated: id = {}, type: {}, quantity: {}",

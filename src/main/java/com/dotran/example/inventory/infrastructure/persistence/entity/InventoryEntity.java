@@ -8,6 +8,7 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -53,6 +54,9 @@ public class InventoryEntity {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)
     private InventoryStatus status;
+
+    @Version
+    private Long version;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false)

@@ -5,6 +5,7 @@ import com.dotran.example.inventory.domain.model.Inventory;
 import com.dotran.example.inventory.infrastructure.persistence.entity.InventoryEntity;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
+import org.mapstruct.MappingTarget;
 import org.springframework.beans.factory.annotation.Autowired;
 
 @Mapper(
@@ -29,5 +30,15 @@ public abstract class InventoryPersistenceMapper {
     @Mapping(target = "storeId", source = "storeId.value")
     @Mapping(target = "storeProductId", source = "productId.value")
     @Mapping(target = "sku", source = "sku.value")
+    @Mapping(target = "version", ignore = true)
     public abstract InventoryEntity fromInventory(Inventory inventory);
+
+    @Mapping(target = "id", ignore = true)
+    @Mapping(target = "version", ignore = true)
+    @Mapping(target = "tenantId", source = "tenantId.value")
+    @Mapping(target = "storeId", source = "storeId.value")
+    @Mapping(target = "storeProductId", source = "productId.value")
+    @Mapping(target = "sku", source = "sku.value")
+    public abstract void updateInventory(Inventory inventory,
+                                         @MappingTarget InventoryEntity entity);
 }
