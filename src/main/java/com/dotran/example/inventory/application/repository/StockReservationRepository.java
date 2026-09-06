@@ -9,6 +9,8 @@ public interface StockReservationRepository {
 
     StockReservation create(StockReservation stockReservation);
 
+    List<StockReservation> createBatch(List<StockReservation> stockReservations);
+
     List<StockReservation> getByOrderId(OrderId orderId);
 
     List<StockReservation> confirm(List<StockReservation> stockReservations);

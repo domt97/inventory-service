@@ -33,6 +33,19 @@ public class StockReservationRepositoryAdapter implements StockReservationReposi
     }
 
     @Override
+    public List<StockReservation> createBatch(List<StockReservation> stockReservations) {
+        List<StockReservationEntity> entities = stockReservations.stream()
+                .map(stockReservationPersistenceMapper::toEntity)
+                .toList();
+
+        List<StockReservationEntity> savedEntities = springDataStockReservationRepository.saveAllAndFlush(entities);
+
+        return savedEntities.stream()
+                .map(stockReservationPersistenceMapper::toDomain)
+                .toList();
+    }
+
+    @Override
     public List<StockReservation> getByOrderId(OrderId orderId) {
         List<StockReservationEntity> entities = springDataStockReservationRepository.findByOrderId(orderId.getValue());
 
