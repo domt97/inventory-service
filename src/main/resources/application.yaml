@@ -61,7 +61,7 @@ app:
   inventory:
     jobs:
       awaiting-expire-stock-reservation:
-        cron: "0 0/1 * * * ?" # Every 5 minutes
+        cron: "0 0/1 * * * ?" # Every 1 minutes
 
 springdoc:
   api-docs:
