@@ -6,6 +6,7 @@ import com.dotran.example.inventory.common.domain.valueobject.SKU;
 import com.dotran.example.inventory.common.domain.valueobject.StoreId;
 import com.dotran.example.inventory.domain.model.Inventory;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -20,6 +21,8 @@ public interface InventoryRepository {
     List<Inventory> createBatch(List<Inventory> inventories);
 
     Optional<Inventory> getById(InventoryId inventoryId);
+
+    List<Inventory> getAllById(Collection<InventoryId> inventoryIds);
 
     List<Inventory> getByProductId(ProductId productId);
 

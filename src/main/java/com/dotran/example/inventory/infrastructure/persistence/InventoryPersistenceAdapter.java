@@ -14,6 +14,7 @@ import com.dotran.example.inventory.infrastructure.persistence.entity.StockReser
 import com.dotran.example.inventory.infrastructure.persistence.jpa.SpringDataInventoryRepository;
 import lombok.RequiredArgsConstructor;
 
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -110,6 +111,15 @@ public class InventoryPersistenceAdapter implements InventoryRepository {
         return springDataInventoryRepository
                 .findById(inventoryId.getValue())
                 .map(mapper::fromEntity);
+    }
+
+    @Override
+    public List<Inventory> getAllById(Collection<InventoryId> inventoryIds) {
+        return springDataInventoryRepository
+                .findAllById(inventoryIds.stream().map(InventoryId::getValue).toList())
+                .stream()
+                .map(mapper::fromEntity)
+                .collect(toList());
     }
 
     @Override

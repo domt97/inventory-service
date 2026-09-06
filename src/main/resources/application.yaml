@@ -58,6 +58,11 @@ app:
     table:
       tenant-info: tenant_info
 
+  inventory:
+    jobs:
+      awaiting-expire-stock-reservation:
+        cron: "0 0/1 * * * ?" # Every 5 minutes
+
 springdoc:
   api-docs:
     path: /api-docs

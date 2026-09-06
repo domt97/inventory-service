@@ -77,4 +77,13 @@ public class StockReservation extends BaseDomain<StockReservationId> {
         status = ReservationStatus.CONFIRMED;
         updatedAt = Instant.now();
     }
+
+    public void expire() {
+        if (status != ReservationStatus.RESERVED) {
+            throw new InvalidReservationStateException();
+        }
+
+        status = ReservationStatus.EXPIRED;
+        updatedAt = Instant.now();
+    }
 }
