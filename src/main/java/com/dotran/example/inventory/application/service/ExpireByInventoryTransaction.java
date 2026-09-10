@@ -7,10 +7,11 @@ import com.dotran.example.inventory.common.exception.NotFoundException;
 import com.dotran.example.inventory.common.utils.CollectionUtils;
 import com.dotran.example.inventory.domain.model.Inventory;
 import com.dotran.example.inventory.domain.model.StockReservation;
-import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
@@ -22,7 +23,7 @@ public class ExpireByInventoryTransaction {
     private final StockReservationRepository stockReservationRepository;
     private final InventoryRepository inventoryRepository;
 
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void execute(InventoryId inventoryId, List<StockReservation> expiredReservations) {
         log.info("Executing ExpireByInventoryTransaction for {} reservations", expiredReservations.size());
 
