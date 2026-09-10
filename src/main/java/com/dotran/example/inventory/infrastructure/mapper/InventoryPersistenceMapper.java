@@ -35,10 +35,8 @@ public abstract class InventoryPersistenceMapper {
     public abstract InventoryEntity fromInventory(Inventory inventory);
 
     @BeanMapping(ignoreByDefault = true)
-    @Mapping(target = "tenantId", source = "tenantId.value")
-    @Mapping(target = "storeId", source = "storeId.value")
-    @Mapping(target = "storeProductId", source = "productId.value")
-    @Mapping(target = "sku", source = "sku.value")
+    @Mapping(target = "quantity", source = "inventory.quantity")
+    @Mapping(target = "reservedQuantity", source = "inventory.reservedQuantity")
     public abstract void updateInventory(Inventory inventory,
                                          @MappingTarget InventoryEntity entity);
 }
