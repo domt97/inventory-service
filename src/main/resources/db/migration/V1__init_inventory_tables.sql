@@ -15,8 +15,8 @@ CREATE TABLE IF NOT EXISTS inventories
 
     version            BIGINT NOT NULL DEFAULT 0,
 
-    created_at         TIMESTAMP NOT NULL,
-    updated_at         TIMESTAMP NOT NULL,
+    created_at         TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at         TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT uk_inventory_store_sku
         UNIQUE (store_id, sku)
@@ -55,10 +55,10 @@ CREATE TABLE IF NOT EXISTS stock_reservations
 
     status          VARCHAR(30) NOT NULL,
 
-    expires_at      TIMESTAMP,
+    expires_at      TIMESTAMPTZ,
 
-    created_at      TIMESTAMP NOT NULL,
-    updated_at      TIMESTAMP NOT NULL
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX idx_stock_reservation_order
@@ -96,7 +96,7 @@ CREATE TABLE stock_movements
 
     reason          VARCHAR(255),
 
-    created_at      TIMESTAMP NOT NULL
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX idx_stock_movement_inventory

@@ -4,6 +4,7 @@ import com.dotran.example.inventory.common.domain.BaseDomain;
 import com.dotran.example.inventory.common.domain.valueobject.InventoryId;
 import com.dotran.example.inventory.common.domain.valueobject.OrderId;
 import com.dotran.example.inventory.common.domain.valueobject.OrderItemId;
+import com.dotran.example.inventory.common.domain.valueobject.ProductId;
 import com.dotran.example.inventory.common.domain.valueobject.StockReservationId;
 import com.dotran.example.inventory.common.domain.valueobject.StoreId;
 import com.dotran.example.inventory.common.domain.valueobject.TenantId;
@@ -34,11 +35,29 @@ public class StockReservation extends BaseDomain<StockReservationId> {
     private ReservationStatus status;
 
     private Instant expiresAt;
+    private Instant createdAt;
+    private Instant updatedAt;
 
 
-    public void reserve() {
-        status = ReservationStatus.RESERVED;
-        expiresAt = Instant.now().plus(30, ChronoUnit.MINUTES);
+    public static StockReservation reserve(TenantId tenantId,
+                                               StoreId storeId,
+                                               OrderId orderId,
+                                               OrderItemId orderItemId,
+                                               InventoryId inventoryId,
+                                               long quantity) {
+        Instant now = Instant.now();
+        return StockReservation.builder()
+                .tenantId(tenantId)
+                .storeId(storeId)
+                .orderId(orderId)
+                .orderItemId(orderItemId)
+                .inventoryId(inventoryId)
+                .quantity(quantity)
+                .status(ReservationStatus.RESERVED)
+                .createdAt(now)
+                .updatedAt(now)
+                .expiresAt(now.plus(30, ChronoUnit.MINUTES))
+                .build();
     }
 
     public void release() {
@@ -47,6 +66,7 @@ public class StockReservation extends BaseDomain<StockReservationId> {
         }
 
         status = ReservationStatus.RELEASED;
+        updatedAt = Instant.now();
     }
 
     public void confirm() {
@@ -55,5 +75,15 @@ public class StockReservation extends BaseDomain<StockReservationId> {
         }
 
         status = ReservationStatus.CONFIRMED;
+        updatedAt = Instant.now();
+    }
+
+    public void expire() {
+        if (status != ReservationStatus.RESERVED) {
+            throw new InvalidReservationStateException();
+        }
+
+        status = ReservationStatus.EXPIRED;
+        updatedAt = Instant.now();
     }
 }

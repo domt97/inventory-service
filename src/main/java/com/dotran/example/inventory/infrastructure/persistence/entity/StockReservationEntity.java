@@ -48,9 +48,6 @@ public class StockReservationEntity {
     @Column(name = "inventory_id", nullable = false)
     private UUID inventoryId;
 
-    @Column(name = "sku_id", nullable = false)
-    private UUID skuId;
-
     @Column(name = "order_id", nullable = false)
     private UUID orderId;
 

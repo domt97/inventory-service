@@ -3,6 +3,7 @@ package com.dotran.example.inventory.infrastructure.mapper;
 import com.dotran.example.inventory.common.mapper.IdMapper;
 import com.dotran.example.inventory.domain.model.Inventory;
 import com.dotran.example.inventory.infrastructure.persistence.entity.InventoryEntity;
+import org.mapstruct.BeanMapping;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.MappingTarget;
@@ -33,12 +34,9 @@ public abstract class InventoryPersistenceMapper {
     @Mapping(target = "version", ignore = true)
     public abstract InventoryEntity fromInventory(Inventory inventory);
 
-    @Mapping(target = "id", ignore = true)
-    @Mapping(target = "version", ignore = true)
-    @Mapping(target = "tenantId", source = "tenantId.value")
-    @Mapping(target = "storeId", source = "storeId.value")
-    @Mapping(target = "storeProductId", source = "productId.value")
-    @Mapping(target = "sku", source = "sku.value")
+    @BeanMapping(ignoreByDefault = true)
+    @Mapping(target = "quantity", source = "inventory.quantity")
+    @Mapping(target = "reservedQuantity", source = "inventory.reservedQuantity")
     public abstract void updateInventory(Inventory inventory,
                                          @MappingTarget InventoryEntity entity);
 }
