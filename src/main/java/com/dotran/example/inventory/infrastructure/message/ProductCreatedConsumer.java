@@ -5,7 +5,6 @@ import com.dotran.example.inventory.application.usecase.inventory.CreateInventor
 import com.dotran.example.inventory.common.domain.valueobject.ProductId;
 import com.dotran.example.inventory.common.domain.valueobject.StoreId;
 import com.dotran.example.inventory.common.domain.valueobject.TenantId;
-import com.dotran.example.inventory.common.mapper.IdMapper;
 import com.dotran.example.inventory.domain.event.ProductCreatedEvent;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -22,7 +21,6 @@ public class ProductCreatedConsumer {
 
     private final ObjectMapper objectMapper;
     private final CreateInventoryUseCase createInventoryUseCase;
-    private final IdMapper idMapper;
 
     @KafkaListener(
             topics = "ProductCreated",
