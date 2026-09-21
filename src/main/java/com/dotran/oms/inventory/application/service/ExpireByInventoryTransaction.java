@@ -1,0 +1,57 @@
+package com.dotran.oms.inventory.application.service;
+
+import com.dotran.oms.inventory.application.repository.InventoryRepository;
+import com.dotran.oms.inventory.application.repository.StockReservationRepository;
+import com.dotran.oms.inventory.common.utils.CollectionUtils;
+import com.dotran.oms.inventory.domain.model.Inventory;
+import com.dotran.oms.inventory.domain.model.StockReservation;
+import com.dotran.oms.core.domain.id.InventoryId;
+import com.dotran.oms.core.exception.NotFoundException;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
+
+@Service
+@RequiredArgsConstructor
+@Slf4j
+public class ExpireByInventoryTransaction {
+
+    private final StockReservationRepository stockReservationRepository;
+    private final InventoryRepository inventoryRepository;
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void execute(InventoryId inventoryId, List<StockReservation> expiredReservations) {
+        log.info("Executing ExpireByInventoryTransaction for {} reservations", expiredReservations.size());
+
+        if (CollectionUtils.isEmpty(expiredReservations)) {
+            log.info("No reservations to expire");
+            return;
+        }
+
+        for (StockReservation stockReservation : expiredReservations) {
+            stockReservation.expire();
+        }
+        List<StockReservation> updatedReservations = stockReservationRepository.expire(expiredReservations);
+
+        long releaseQuantity = updatedReservations.stream()
+                .mapToLong(StockReservation::getQuantity)
+                .sum();
+
+        Inventory inventory = inventoryRepository.getById(inventoryId)
+                .orElseThrow(() -> new NotFoundException("Inventory not found: " + inventoryId));
+
+        inventory.release(releaseQuantity);
+
+        inventoryRepository.update(inventory);
+
+
+        log.info("Expired {} reservations and released {} quantity for inventory {}",
+                updatedReservations.size(),
+                releaseQuantity,
+                inventoryId);
+    }
+}
