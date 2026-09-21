@@ -1,5 +1,7 @@
 package com.dotran.example.inventory.common.domain.valueobject;
 
+import com.dotran.oms.core.domain.id.BaseId;
+
 public class StockMovementId extends BaseId<Long> {
 
     public StockMovementId(Long value) {

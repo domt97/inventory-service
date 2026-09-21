@@ -1,7 +1,6 @@
 package com.dotran.example.inventory.domain.event;
 
-import com.dotran.example.inventory.common.domain.valueobject.SKU;
-import com.dotran.example.inventory.common.domain.valueobject.TenantId;
+import com.dotran.oms.core.domain.id.SKU;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;

@@ -2,10 +2,10 @@ package com.dotran.example.inventory.infrastructure.message;
 
 import com.dotran.example.inventory.application.command.CreateInventoryCmd;
 import com.dotran.example.inventory.application.usecase.inventory.CreateInventoryUseCase;
-import com.dotran.example.inventory.common.domain.valueobject.ProductId;
-import com.dotran.example.inventory.common.domain.valueobject.StoreId;
-import com.dotran.example.inventory.common.domain.valueobject.TenantId;
 import com.dotran.example.inventory.domain.event.ProductCreatedEvent;
+import com.dotran.oms.core.domain.id.ProductId;
+import com.dotran.oms.core.domain.id.StoreId;
+import com.dotran.oms.core.domain.id.TenantId;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;

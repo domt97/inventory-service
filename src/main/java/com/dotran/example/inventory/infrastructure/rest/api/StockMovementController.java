@@ -1,10 +1,10 @@
 package com.dotran.example.inventory.infrastructure.rest.api;
 
 import com.dotran.example.inventory.application.usecase.movement.GetStockMovementsUseCase;
-import com.dotran.example.inventory.common.domain.valueobject.InventoryId;
 import com.dotran.example.inventory.infrastructure.rest.dto.response.StockMovementResponse;
 import com.dotran.example.inventory.infrastructure.rest.mapper.StockMovementRestMapper;
 import com.dotran.oms.core.annotation.WebAdapter;
+import com.dotran.oms.core.domain.id.InventoryId;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;

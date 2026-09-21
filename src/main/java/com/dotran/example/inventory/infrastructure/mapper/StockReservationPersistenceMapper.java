@@ -1,8 +1,9 @@
 package com.dotran.example.inventory.infrastructure.mapper;
 
-import com.dotran.example.inventory.common.mapper.IdMapper;
+import com.dotran.example.inventory.common.mapper.InternalIdMapper;
 import com.dotran.example.inventory.domain.model.StockReservation;
 import com.dotran.example.inventory.infrastructure.persistence.entity.StockReservationEntity;
+import com.dotran.oms.core.mapper.IdMapper;
 import org.mapstruct.BeanMapping;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
@@ -11,12 +12,15 @@ import org.springframework.beans.factory.annotation.Autowired;
 
 @Mapper(
         componentModel = "spring",
-        uses = IdMapper.class
+        uses = {IdMapper.class, InternalIdMapper.class}
 )
 public abstract class StockReservationPersistenceMapper {
 
     @Autowired
     protected IdMapper idMapper;
+
+    @Autowired
+    protected InternalIdMapper internalIdMapper;
 
     @Mapping(target = "id", source = "id.value")
     @Mapping(target = "tenantId", source = "tenantId.value")
@@ -26,7 +30,7 @@ public abstract class StockReservationPersistenceMapper {
     @Mapping(target = "orderItemId", source = "orderItemId.value")
     public abstract StockReservationEntity toEntity(StockReservation stockReservation);
 
-    @Mapping(target = "id", expression = "java(idMapper.toStockReservationId(entity.getId()))")
+    @Mapping(target = "id", expression = "java(internalIdMapper.toStockReservationId(entity.getId()))")
     @Mapping(target = "tenantId", expression = "java(idMapper.toTenantId(entity.getTenantId()))")
     @Mapping(target = "storeId", expression = "java(idMapper.toStoreId(entity.getStoreId()))")
     @Mapping(target = "inventoryId", expression = "java(idMapper.toInventoryId(entity.getInventoryId()))")

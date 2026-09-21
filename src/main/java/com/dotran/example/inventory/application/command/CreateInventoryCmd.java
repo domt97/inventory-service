@@ -1,9 +1,9 @@
 package com.dotran.example.inventory.application.command;
 
-import com.dotran.example.inventory.common.domain.valueobject.ProductId;
-import com.dotran.example.inventory.common.domain.valueobject.SKU;
-import com.dotran.example.inventory.common.domain.valueobject.StoreId;
-import com.dotran.example.inventory.common.domain.valueobject.TenantId;
+import com.dotran.oms.core.domain.id.ProductId;
+import com.dotran.oms.core.domain.id.SKU;
+import com.dotran.oms.core.domain.id.StoreId;
+import com.dotran.oms.core.domain.id.TenantId;
 import lombok.Builder;
 import lombok.Data;
 

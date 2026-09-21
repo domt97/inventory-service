@@ -2,10 +2,10 @@ package com.dotran.example.inventory.application.service;
 
 import com.dotran.example.inventory.application.repository.InventoryRepository;
 import com.dotran.example.inventory.application.repository.StockReservationRepository;
-import com.dotran.example.inventory.common.domain.valueobject.InventoryId;
 import com.dotran.example.inventory.common.utils.CollectionUtils;
 import com.dotran.example.inventory.domain.model.Inventory;
 import com.dotran.example.inventory.domain.model.StockReservation;
+import com.dotran.oms.core.domain.id.InventoryId;
 import com.dotran.oms.core.exception.NotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

@@ -1,12 +1,12 @@
 package com.dotran.example.inventory.domain.model;
 
-import com.dotran.example.inventory.common.domain.BaseDomain;
-import com.dotran.example.inventory.common.domain.valueobject.InventoryId;
-import com.dotran.example.inventory.common.domain.valueobject.ReferenceId;
 import com.dotran.example.inventory.common.domain.valueobject.StockMovementId;
-import com.dotran.example.inventory.common.domain.valueobject.StoreId;
-import com.dotran.example.inventory.common.domain.valueobject.TenantId;
 import com.dotran.example.inventory.domain.enums.StockMovementType;
+import com.dotran.oms.core.domain.BaseDomain;
+import com.dotran.oms.core.domain.id.InventoryId;
+import com.dotran.oms.core.domain.id.ReferenceId;
+import com.dotran.oms.core.domain.id.StoreId;
+import com.dotran.oms.core.domain.id.TenantId;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.experimental.SuperBuilder;

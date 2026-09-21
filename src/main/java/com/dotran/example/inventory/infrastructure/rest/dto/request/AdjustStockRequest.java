@@ -1,6 +1,5 @@
 package com.dotran.example.inventory.infrastructure.rest.dto.request;
 
-import com.dotran.example.inventory.common.domain.valueobject.InventoryId;
 import com.dotran.example.inventory.domain.enums.StockMovementType;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;

@@ -1,8 +1,8 @@
 package com.dotran.example.inventory.application.repository;
 
-import com.dotran.example.inventory.common.domain.valueobject.OrderId;
 import com.dotran.example.inventory.common.domain.valueobject.StockReservationId;
 import com.dotran.example.inventory.domain.model.StockReservation;
+import com.dotran.oms.core.domain.id.OrderId;
 
 import java.time.Instant;
 import java.util.List;

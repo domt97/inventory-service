@@ -1,15 +1,14 @@
 package com.dotran.example.inventory.domain.model;
 
-import com.dotran.example.inventory.common.domain.BaseDomain;
-import com.dotran.example.inventory.common.domain.valueobject.InventoryId;
-import com.dotran.example.inventory.common.domain.valueobject.OrderId;
-import com.dotran.example.inventory.common.domain.valueobject.OrderItemId;
-import com.dotran.example.inventory.common.domain.valueobject.ProductId;
 import com.dotran.example.inventory.common.domain.valueobject.StockReservationId;
-import com.dotran.example.inventory.common.domain.valueobject.StoreId;
-import com.dotran.example.inventory.common.domain.valueobject.TenantId;
 import com.dotran.example.inventory.domain.enums.ReservationStatus;
 import com.dotran.example.inventory.domain.exception.InvalidReservationStateException;
+import com.dotran.oms.core.domain.BaseDomain;
+import com.dotran.oms.core.domain.id.InventoryId;
+import com.dotran.oms.core.domain.id.OrderId;
+import com.dotran.oms.core.domain.id.OrderItemId;
+import com.dotran.oms.core.domain.id.StoreId;
+import com.dotran.oms.core.domain.id.TenantId;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.experimental.SuperBuilder;

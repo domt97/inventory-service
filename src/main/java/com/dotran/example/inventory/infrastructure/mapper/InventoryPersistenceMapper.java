@@ -1,8 +1,8 @@
 package com.dotran.example.inventory.infrastructure.mapper;
 
-import com.dotran.example.inventory.common.mapper.IdMapper;
 import com.dotran.example.inventory.domain.model.Inventory;
 import com.dotran.example.inventory.infrastructure.persistence.entity.InventoryEntity;
+import com.dotran.oms.core.mapper.IdMapper;
 import org.mapstruct.BeanMapping;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
@@ -11,7 +11,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 
 @Mapper(
         componentModel = "spring",
-        uses = IdMapper.class
+        uses = {IdMapper.class}
 )
 public abstract class InventoryPersistenceMapper {
 

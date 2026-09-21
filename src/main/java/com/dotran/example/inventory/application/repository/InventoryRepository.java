@@ -1,10 +1,10 @@
 package com.dotran.example.inventory.application.repository;
 
-import com.dotran.example.inventory.common.domain.valueobject.InventoryId;
-import com.dotran.example.inventory.common.domain.valueobject.ProductId;
-import com.dotran.example.inventory.common.domain.valueobject.SKU;
-import com.dotran.example.inventory.common.domain.valueobject.StoreId;
 import com.dotran.example.inventory.domain.model.Inventory;
+import com.dotran.oms.core.domain.id.InventoryId;
+import com.dotran.oms.core.domain.id.ProductId;
+import com.dotran.oms.core.domain.id.SKU;
+import com.dotran.oms.core.domain.id.StoreId;
 
 import java.util.Collection;
 import java.util.List;

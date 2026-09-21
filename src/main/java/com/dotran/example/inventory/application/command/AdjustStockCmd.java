@@ -1,9 +1,9 @@
 package com.dotran.example.inventory.application.command;
 
-import com.dotran.example.inventory.common.domain.valueobject.InventoryId;
-import com.dotran.example.inventory.common.domain.valueobject.StoreId;
-import com.dotran.example.inventory.common.domain.valueobject.TenantId;
 import com.dotran.example.inventory.domain.enums.StockMovementType;
+import com.dotran.oms.core.domain.id.InventoryId;
+import com.dotran.oms.core.domain.id.StoreId;
+import com.dotran.oms.core.domain.id.TenantId;
 import jakarta.validation.constraints.Positive;
 import lombok.Builder;
 import lombok.Data;

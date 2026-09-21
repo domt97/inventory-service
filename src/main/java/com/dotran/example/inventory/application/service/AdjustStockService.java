@@ -5,12 +5,12 @@ import com.dotran.example.inventory.application.dto.InventoryDetailDto;
 import com.dotran.example.inventory.application.mapper.InventoryMapper;
 import com.dotran.example.inventory.application.repository.InventoryRepository;
 import com.dotran.example.inventory.application.repository.StockMovementRepository;
-import com.dotran.example.inventory.application.repository.TenantRepository;
 import com.dotran.example.inventory.application.usecase.inventory.AdjustStockUseCase;
 import com.dotran.example.inventory.domain.model.Inventory;
 import com.dotran.example.inventory.domain.model.StockMovement;
-import com.dotran.example.inventory.domain.model.TenantInfo;
 import com.dotran.oms.core.annotation.UseCase;
+import com.dotran.oms.core.cloud.dynamodb.DynamoDbTenantInfoRepository;
+import com.dotran.oms.core.domain.TenantInfo;
 import com.dotran.oms.core.exception.NotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -23,13 +23,13 @@ public class AdjustStockService implements AdjustStockUseCase {
 
     private final InventoryRepository repository;
     private final StockMovementRepository stockMovementRepository;
-    private final TenantRepository tenantRepository;
+    private final DynamoDbTenantInfoRepository dynamoDbTenantInfoRepository;
     private final InventoryMapper inventoryMapper;
 
     @Override
     @Transactional
     public InventoryDetailDto adjust(AdjustStockCmd cmd) {
-        TenantInfo tenantInfo = tenantRepository.findByTenantId(cmd.getTenantId())
+        TenantInfo tenantInfo = dynamoDbTenantInfoRepository.findByTenantId(cmd.getTenantId())
                 .orElseThrow(() -> new NotFoundException("Tenant not found"));
 
         Inventory inventory = repository.getById(cmd.getInventoryId())
