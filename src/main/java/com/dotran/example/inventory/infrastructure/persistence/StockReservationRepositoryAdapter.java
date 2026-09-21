@@ -3,13 +3,13 @@ package com.dotran.example.inventory.infrastructure.persistence;
 import com.dotran.example.inventory.application.repository.StockReservationRepository;
 import com.dotran.example.inventory.common.domain.valueobject.OrderId;
 import com.dotran.example.inventory.common.domain.valueobject.StockReservationId;
-import com.dotran.example.inventory.common.exception.NotFoundException;
 import com.dotran.example.inventory.domain.enums.ReservationStatus;
 import com.dotran.example.inventory.domain.model.StockReservation;
 import com.dotran.example.inventory.infrastructure.mapper.StockReservationPersistenceMapper;
 import com.dotran.example.inventory.infrastructure.persistence.entity.StockReservationEntity;
 import com.dotran.example.inventory.infrastructure.persistence.jpa.SpringDataStockReservationRepository;
 import com.dotran.oms.core.annotation.PersistenceAdapter;
+import com.dotran.oms.core.exception.NotFoundException;
 import lombok.RequiredArgsConstructor;
 
 import java.time.Instant;

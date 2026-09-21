@@ -5,12 +5,12 @@ import com.dotran.example.inventory.common.domain.valueobject.InventoryId;
 import com.dotran.example.inventory.common.domain.valueobject.ProductId;
 import com.dotran.example.inventory.common.domain.valueobject.SKU;
 import com.dotran.example.inventory.common.domain.valueobject.StoreId;
-import com.dotran.example.inventory.common.exception.NotFoundException;
 import com.dotran.example.inventory.domain.model.Inventory;
 import com.dotran.example.inventory.infrastructure.mapper.InventoryPersistenceMapper;
 import com.dotran.example.inventory.infrastructure.persistence.entity.InventoryEntity;
 import com.dotran.example.inventory.infrastructure.persistence.jpa.SpringDataInventoryRepository;
 import com.dotran.oms.core.annotation.PersistenceAdapter;
+import com.dotran.oms.core.exception.NotFoundException;
 import lombok.RequiredArgsConstructor;
 
 import java.util.Collection;
