@@ -2,7 +2,7 @@ package com.dotran.example.inventory.infrastructure.jobs;
 
 import com.dotran.example.inventory.application.jobs.AwaitingExpireStockReservationUseCase;
 import com.dotran.example.inventory.application.service.ExpireStockReservationService;
-import com.dotran.example.inventory.common.annotation.JobAdapter;
+import com.dotran.oms.core.annotation.JobAdapter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;

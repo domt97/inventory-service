@@ -1,10 +1,10 @@
 package com.dotran.example.inventory.infrastructure.cloud.dynamodb;
 
 import com.dotran.example.inventory.application.repository.TenantRepository;
-import com.dotran.example.inventory.common.annotation.PersistenceAdapter;
 import com.dotran.example.inventory.common.domain.valueobject.TenantId;
 import com.dotran.example.inventory.domain.model.TenantInfo;
 import com.dotran.example.inventory.infrastructure.mapper.TenantInfoMapper;
+import com.dotran.oms.core.annotation.PersistenceAdapter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.enhanced.dynamodb.DynamoDbTable;
