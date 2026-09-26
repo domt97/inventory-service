@@ -3,7 +3,6 @@ package com.dotran.oms.inventory.infrastructure.mapper;
 import com.dotran.oms.inventory.common.mapper.InternalIdMapper;
 import com.dotran.oms.inventory.domain.model.StockMovement;
 import com.dotran.oms.inventory.infrastructure.persistence.entity.StockMovementEntity;
-import com.dotran.oms.core.mapper.IdMapper;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -15,12 +14,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 public abstract class StockMovementPersistenceMapper {
 
     @Autowired
-    protected IdMapper idMapper;
+    protected InternalIdMapper idMapper;
 
-    @Autowired
-    protected InternalIdMapper internalIdMapper;
-
-    @Mapping(target = "id", expression = "java(internalIdMapper.toStockMovementId(entity.getId()))")
+    @Mapping(target = "id", expression = "java(idMapper.toStockMovementId(entity.getId()))")
     @Mapping(target = "tenantId", expression = "java(idMapper.toTenantId(entity.getTenantId()))")
     @Mapping(target = "storeId", expression = "java(idMapper.toStoreId(entity.getStoreId()))")
     @Mapping(target = "inventoryId", expression = "java(idMapper.toInventoryId(entity.getInventoryId()))")

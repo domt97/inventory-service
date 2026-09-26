@@ -14,7 +14,7 @@ import java.util.List;
 public abstract class StockMovementRestMapper {
 
     @Autowired
-    protected InternalIdMapper internalIdMapper;
+    protected InternalIdMapper idMapper;
 
     public abstract StockMovementResponse toStockMovementResponse(StockMovementDto dto);
 
