@@ -1,8 +1,8 @@
 package com.dotran.oms.inventory.common.mapper;
 
 import com.dotran.oms.core.mapper.IdMapper;
-import com.dotran.oms.inventory.common.domain.valueobject.StockMovementId;
-import com.dotran.oms.inventory.common.domain.valueobject.StockReservationId;
+import com.dotran.oms.inventory.common.id.StockMovementId;
+import com.dotran.oms.inventory.common.id.StockReservationId;
 import org.mapstruct.Mapper;
 import org.mapstruct.Named;
 

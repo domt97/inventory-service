@@ -1,7 +1,7 @@
 package com.dotran.oms.inventory.infrastructure.persistence;
 
 import com.dotran.oms.inventory.application.repository.StockReservationRepository;
-import com.dotran.oms.inventory.common.domain.valueobject.StockReservationId;
+import com.dotran.oms.inventory.common.id.StockReservationId;
 import com.dotran.oms.inventory.domain.enums.ReservationStatus;
 import com.dotran.oms.inventory.domain.model.StockReservation;
 import com.dotran.oms.inventory.infrastructure.mapper.StockReservationPersistenceMapper;

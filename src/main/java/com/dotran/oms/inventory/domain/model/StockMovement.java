@@ -1,6 +1,6 @@
 package com.dotran.oms.inventory.domain.model;
 
-import com.dotran.oms.inventory.common.domain.valueobject.StockMovementId;
+import com.dotran.oms.inventory.common.id.StockMovementId;
 import com.dotran.oms.inventory.domain.enums.StockMovementType;
 import com.dotran.oms.core.domain.BaseDomain;
 import com.dotran.oms.core.domain.id.InventoryId;

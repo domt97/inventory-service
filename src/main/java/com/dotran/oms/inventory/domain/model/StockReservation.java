@@ -1,6 +1,6 @@
 package com.dotran.oms.inventory.domain.model;
 
-import com.dotran.oms.inventory.common.domain.valueobject.StockReservationId;
+import com.dotran.oms.inventory.common.id.StockReservationId;
 import com.dotran.oms.inventory.domain.enums.ReservationStatus;
 import com.dotran.oms.inventory.domain.exception.InvalidReservationStateException;
 import com.dotran.oms.core.domain.BaseDomain;

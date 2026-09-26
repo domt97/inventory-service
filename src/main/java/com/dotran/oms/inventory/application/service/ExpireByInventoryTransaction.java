@@ -1,8 +1,8 @@
 package com.dotran.oms.inventory.application.service;
 
+import com.dotran.oms.core.util.CollectionUtils;
 import com.dotran.oms.inventory.application.repository.InventoryRepository;
 import com.dotran.oms.inventory.application.repository.StockReservationRepository;
-import com.dotran.oms.inventory.common.utils.CollectionUtils;
 import com.dotran.oms.inventory.domain.model.Inventory;
 import com.dotran.oms.inventory.domain.model.StockReservation;
 import com.dotran.oms.core.domain.id.InventoryId;

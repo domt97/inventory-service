@@ -1,4 +1,4 @@
-package com.dotran.oms.inventory.common.domain.valueobject;
+package com.dotran.oms.inventory.common.id;
 
 import com.dotran.oms.core.domain.id.BaseId;
 

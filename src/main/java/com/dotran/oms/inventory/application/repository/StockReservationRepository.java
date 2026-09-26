@@ -1,6 +1,6 @@
 package com.dotran.oms.inventory.application.repository;
 
-import com.dotran.oms.inventory.common.domain.valueobject.StockReservationId;
+import com.dotran.oms.inventory.common.id.StockReservationId;
 import com.dotran.oms.inventory.domain.model.StockReservation;
 import com.dotran.oms.core.domain.id.OrderId;
 

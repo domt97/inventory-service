@@ -1,10 +1,10 @@
 package com.dotran.oms.inventory.application.service;
 
 import com.dotran.oms.core.exception.ValidationException;
+import com.dotran.oms.core.util.CollectionUtils;
 import com.dotran.oms.inventory.application.command.ConfirmStockReservationCmd;
 import com.dotran.oms.inventory.application.repository.StockReservationRepository;
 import com.dotran.oms.inventory.application.usecase.reservation.ConfirmStockReservationUseCase;
-import com.dotran.oms.inventory.common.utils.CollectionUtils;
 import com.dotran.oms.inventory.domain.model.StockReservation;
 import com.dotran.oms.core.annotation.UseCase;
 import lombok.RequiredArgsConstructor;
