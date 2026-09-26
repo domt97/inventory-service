@@ -1,1 +1,6 @@
 rootProject.name = 'inventory-service'
+def coreDir = file('../oms-core')
+
+if (coreDir.isDirectory()) {
+    includeBuild(coreDir)
+}

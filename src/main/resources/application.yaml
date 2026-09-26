@@ -63,16 +63,10 @@ app:
       awaiting-expire-stock-reservation:
         cron: "0 0/1 * * * ?" # Every 1 minutes
 
-springdoc:
-  api-docs:
-    path: /api-docs
-
-  swagger-ui:
-    operationsSorter: method
-    tagsSorter: alpha
-    display-request-duration: true
-    try-it-out-enabled: true
-    enabled: true
+  swagger:
+    title: Inventory Service API
+    version: v1
+    description: Inventory service REST API
 
 logging:
   level:

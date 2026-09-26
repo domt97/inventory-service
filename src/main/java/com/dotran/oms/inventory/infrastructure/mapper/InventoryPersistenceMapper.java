@@ -1,0 +1,42 @@
+package com.dotran.oms.inventory.infrastructure.mapper;
+
+import com.dotran.oms.inventory.domain.model.Inventory;
+import com.dotran.oms.inventory.infrastructure.persistence.entity.InventoryEntity;
+import com.dotran.oms.core.mapper.IdMapper;
+import org.mapstruct.BeanMapping;
+import org.mapstruct.Mapper;
+import org.mapstruct.Mapping;
+import org.mapstruct.MappingTarget;
+import org.springframework.beans.factory.annotation.Autowired;
+
+@Mapper(
+        componentModel = "spring",
+        uses = {IdMapper.class}
+)
+public abstract class InventoryPersistenceMapper {
+
+    @Autowired
+    protected IdMapper idMapper;
+
+    @Mapping(target = "id", expression = "java(idMapper.toInventoryId(entity.getId()))")
+    @Mapping(target = "tenantId", expression = "java(idMapper.toTenantId(entity.getTenantId()))")
+    @Mapping(target = "storeId", expression = "java(idMapper.toStoreId(entity.getStoreId()))")
+    @Mapping(target = "productId", expression = "java(idMapper.toProductId(entity.getStoreProductId()))")
+    @Mapping(target = "sku", expression = "java(idMapper.toSKU(entity.getSku()))")
+    public abstract Inventory fromEntity(InventoryEntity entity);
+
+
+    @Mapping(target = "id", source = "id.value")
+    @Mapping(target = "tenantId", source = "tenantId.value")
+    @Mapping(target = "storeId", source = "storeId.value")
+    @Mapping(target = "storeProductId", source = "productId.value")
+    @Mapping(target = "sku", source = "sku.value")
+    @Mapping(target = "version", ignore = true)
+    public abstract InventoryEntity fromInventory(Inventory inventory);
+
+    @BeanMapping(ignoreByDefault = true)
+    @Mapping(target = "quantity", source = "inventory.quantity")
+    @Mapping(target = "reservedQuantity", source = "inventory.reservedQuantity")
+    public abstract void updateInventory(Inventory inventory,
+                                         @MappingTarget InventoryEntity entity);
+}

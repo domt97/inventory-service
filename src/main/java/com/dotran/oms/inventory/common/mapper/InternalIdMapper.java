@@ -1,0 +1,21 @@
+package com.dotran.oms.inventory.common.mapper;
+
+import com.dotran.oms.core.mapper.IdMapper;
+import com.dotran.oms.inventory.common.id.StockMovementId;
+import com.dotran.oms.inventory.common.id.StockReservationId;
+import org.mapstruct.Mapper;
+import org.mapstruct.Named;
+
+@Mapper(componentModel = "spring")
+public interface InternalIdMapper extends IdMapper {
+
+    @Named("toStockMovementId")
+    default StockMovementId toStockMovementId(Long id) {
+        return id == null ? null : new StockMovementId(id);
+    }
+
+    @Named("toStockReservationId")
+    default StockReservationId toStockReservationId(Long id) {
+        return id == null ? null : new StockReservationId(id);
+    }
+}
