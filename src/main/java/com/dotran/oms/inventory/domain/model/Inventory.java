@@ -1,11 +1,11 @@
 package com.dotran.oms.inventory.domain.model;
 
+import com.dotran.oms.core.exception.ValidationException;
 import com.dotran.oms.inventory.domain.enums.InventoryStatus;
 import com.dotran.oms.inventory.domain.enums.StockMovementType;
 import com.dotran.oms.inventory.domain.exception.InsufficientStockException;
 import com.dotran.oms.inventory.domain.exception.InvalidQuantityException;
 import com.dotran.oms.inventory.domain.exception.InvalidReservationException;
-import com.dotran.oms.inventory.domain.exception.ValidationException;
 import com.dotran.oms.core.domain.BaseDomain;
 import com.dotran.oms.core.domain.id.InventoryId;
 import com.dotran.oms.core.domain.id.ProductId;
