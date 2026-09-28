@@ -38,6 +38,15 @@ spring:
     user: postgres
     password: postgres
 
+  cloud:
+    aws:
+      region:
+        static: eu-west-1
+      credentials:
+        access-key: test
+        secret-key: test
+      endpoint: http://localhost:4566
+
   kafka:
     bootstrap-servers: localhost:9092
 
@@ -57,13 +66,11 @@ aws:
   dynamodb:
     table:
       tenant-info: ${AWS_DYNAMODB_TABLE:localdev_tenant_info}
+  sqs:
+    queues:
+      reservation-expire: ${AWS_SQS_RESERVATION_EXPIRE_QUEUE:localdev-reservation-expire-queue}
 
 app:
-  inventory:
-    jobs:
-      awaiting-expire-stock-reservation:
-        cron: "0 0/1 * * * ?" # Every 1 minutes
-
   swagger:
     title: Inventory Service API
     version: v1
