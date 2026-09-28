@@ -38,6 +38,15 @@ spring:
     user: postgres
     password: postgres
 
+  cloud:
+    aws:
+      region:
+        static: eu-west-1
+      credentials:
+        access-key: test
+        secret-key: test
+      endpoint: http://localhost:4566
+
   kafka:
     bootstrap-servers: localhost:9092
 
@@ -46,23 +55,22 @@ spring:
       auto-offset-reset: earliest
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+aws:
+  # For local development with LocalStack
+  # endpoint: http://localhost:4566
+  region: ${AWS_REGION:eu-west-1}
+  endpoint: ${AWS_ENDPOINT:http://localhost:4566}
+  access-key: ${AWS_ACCESS_KEY:test}
+  secret-key: ${AWS_SECRET_KEY:test}
+
+  dynamodb:
+    table:
+      tenant-info: ${AWS_DYNAMODB_TABLE:localdev_tenant_info}
+  sqs:
+    queues:
+      reservation-expire: ${AWS_SQS_RESERVATION_EXPIRE_QUEUE:localdev-reservation-expire-queue}
 
 app:
-  dynamodb:
-    # For local development with LocalStack
-    # endpoint: http://localhost:4566
-    endpoint: ""
-    region: eu-west-1
-    access-key: ""
-    secret-key: ""
-    table:
-      tenant-info: tenant_info
-
-  inventory:
-    jobs:
-      awaiting-expire-stock-reservation:
-        cron: "0 0/1 * * * ?" # Every 1 minutes
-
   swagger:
     title: Inventory Service API
     version: v1
