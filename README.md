@@ -1,306 +1,409 @@
-# Stores Service
+# Inventory Service
 
-A multi-tenant store management system built with Spring Boot 3.2.3 and Java 17, following **DDD (Domain-Driven Design)** and **Hexagonal Architecture** principles.
+A production-grade inventory microservice for an Order Management System (OMS), built with **Java 17** and **Spring Boot 3.2.3**, applying **Domain-Driven Design (DDD)** and **Hexagonal Architecture**.
 
 [![Java](https://img.shields.io/badge/Java-17-blue.svg)](https://openjdk.org/projects/jdk/17/)
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.2.3-brightgreen.svg)](https://spring.io/projects/spring-boot)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-blue.svg)](https://www.postgresql.org/)
 
-## 📋 Table of Contents
+## Table of Contents
 
 - [Overview](#overview)
-- [Key Features](#key-features)
-- [Technology Stack](#technology-stack)
+- [Order Lifecycle & Inventory Flow](#order-lifecycle--inventory-flow)
 - [Architecture](#architecture)
-- [Getting Started](#getting-started)
-- [API Documentation](#api-documentation)
+- [Domain Model](#domain-model)
+- [Event-Driven Integration](#event-driven-integration)
+- [Technology Stack](#technology-stack)
 - [Project Structure](#project-structure)
-- [Database](#database)
+- [Database Schema](#database-schema)
+- [Getting Started](#getting-started)
+- [API Reference](#api-reference)
 - [Configuration](#configuration)
-- [Development](#development)
 
-## 🎯 Overview
+---
 
-Stores Service is a comprehensive store management platform designed for multi-tenant environments. It provides robust APIs for managing stores, products, collections, and operational configurations with full support for business hours, availability schedules, and product variants (SKUs).
+## Overview
 
-**Domain Model:**
-- **Store**: Multi-tenant stores with lifecycle management (open/close)
-- **Store Products**: Products with multiple SKUs, images, and pricing
-- **Store Collections**: Product grouping for merchandising
-- **Store Availability**: Time-based availability schedules
-- **Store Configuration**: Business hours and operational settings
-- **Tenant Info**: Multi-tenant support with DynamoDB integration
+The Inventory Service is a downstream microservice in the OMS ecosystem responsible for tracking stock levels, managing stock reservations, and recording all stock movements.
 
-## ✨ Key Features
+**Bounded Context:** Inventory  
+**Role in OMS:** Downstream consumer of store and order events; upstream source of stock availability truth.
 
-### Store Management
-- ✅ Create, retrieve, close, and reopen stores
-- ✅ Multi-tenant isolation by tenant ID
-- ✅ Store-level configuration and business hours
-- ✅ Availability schedule management
+**Core Responsibilities:**
+- Track available and reserved stock per SKU per store
+- Reserve stock when an order is created
+- Confirm stock when an order is paid/confirmed
+- Release reserved stock when an order times out or is cancelled
+- Provide a manual stock adjustment API with full audit trail
+- Record all stock movements for audit and reporting
 
-### Product Management
-- ✅ Product creation with multiple SKUs and images
-- ✅ Product variants with individual pricing
-- ✅ Thumbnail and image gallery support
-- ✅ Pagination support for product listings
+---
 
-### Collection Management
-- ✅ Create and manage product collections
-- ✅ Add/remove products from collections
-- ✅ Collection-based product organization
-
-### Technical Features
-- ✅ **Immutable Domain Models** using Lombok `@SuperBuilder`
-- ✅ **Value Objects** for type-safe identifiers
-- ✅ **Aggregate Roots** following DDD patterns
-- ✅ **MapStruct** for DTO/Entity mapping
-- ✅ **Batch fetching** optimization with `@BatchSize`
-- ✅ **Swagger/OpenAPI 3.0** documentation
-- ✅ **Flyway** database migrations
-- ✅ **Multi-database** support (PostgreSQL + DynamoDB)
-
-## 🛠 Technology Stack
-
-### Core Framework
-- **Java 17** - LTS with modern language features
-- **Spring Boot 3.2.3** - Application framework
-- **Spring Data JPA** - ORM and repository abstraction
-- **Hibernate 6.4** - JPA implementation with batch optimization
-
-### Database
-- **PostgreSQL** - Primary relational database
-- **DynamoDB** - Tenant information storage
-- **Flyway** - Database version control
-
-### API & Documentation
-- **Spring Web** - RESTful API
-- **SpringDoc OpenAPI 3.0** - Interactive API documentation
-- **Jakarta Validation** - Request validation
-
-### Code Quality & Productivity
-- **Lombok** - Boilerplate reduction
-- **MapStruct 1.6.3** - Type-safe bean mapping
-- **Hibernate Validator 8.0** - Bean validation
-
-### Build & Testing
-- **Gradle** - Build automation
-- **JUnit 5** - Testing framework
-
-## 🏗 Architecture
-
-### DDD Hexagonal Architecture
+## Order Lifecycle & Inventory Flow
 
 ```
-┌────────────────────────────────────────────────────────────┐
-│                    Infrastructure Layer                    │
-│  ┌──────────────┐  ┌─────────────┐  ┌──────────────────┐   │
-│  │ REST API     │  │ Persistence │  │ Cloud Services   │   │
-│  │ Controllers  │  │ Adapters    │  │ (DynamoDB)       │   │
-│  └──────┬───────┘  └──────┬──────┘  └────────┬─────────┘   │
-│         │                 │                  │             │
-└─────────┼─────────────────┼──────────────────┼─────────────┘
-          │                 │                  │
-┌─────────┼─────────────────┼──────────────────┼──────────────┐
-│         │   Application Layer (Use Cases)    │              │
-│         │                 │                  │              │
-│  ┌──────▼─────┐  ┌────────▼────┐  ┌──────────▼────────┐     │
-│  │  Commands  │  │  DTOs       │  │  Port Interfaces  │     │
-│  └────────────┘  └─────────────┘  └───────────────────┘     │
-└──────────────────────────┬──────────────────────────────────┘
-                           │
-┌──────────────────────────▼───────────────────────────────────┐
-│                     Domain Layer                             │
-│  ┌────────────────┐  ┌─────────────┐  ┌──────────────────┐   │
-│  │ Aggregates     │  │ Entities    │  │ Value Objects    │   │
-│  │ (Store,        │  │             │  │ (StoreId,        │   │
-│  │  StoreProduct) │  │             │  │  TenantId, etc.) │   │
-│  └────────────────┘  └─────────────┘  └──────────────────┘   │
-└──────────────────────────────────────────────────────────────┘
+OrderCreated
+    │
+    ▼
+ReserveStock          (stock held, unavailable to other orders)
+    │
+    ├──── Order expires / cancelled
+    │         │
+    │         ▼
+    │     ExpireReservation   (stock released back to available)
+    │         EventBridge → SQS → SqsReservationExpireConsumer
+    │
+    ▼
+OrderConfirmed (payment success)
+    │
+    ▼
+ConfirmReservation    (stock permanently consumed)
+    ▼
+Shipment              (logistics concern — does not affect inventory)
 ```
 
-### Design Principles
+---
 
-**Domain Layer** (Pure Business Logic)
-- Immutable entities with `@SuperBuilder`
-- Value objects for type-safe IDs
-- No framework dependencies
-- Business rules enforcement
+## Architecture
 
-**Application Layer** (Use Cases)
-- Orchestrates domain logic
-- Defines port interfaces (repositories, clients)
-- Command/Query separation
-- DTO transformations
+### Hexagonal Architecture (Ports & Adapters)
 
-**Infrastructure Layer** (Technical Details)
-- REST controllers with Swagger annotations
-- JPA entities and repositories
-- MapStruct mappers
-- External client adapters
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                       Infrastructure Layer                      │
+│                                                                 │
+│  ┌──────────────────┐  ┌──────────────────┐  ┌──────────────┐  │
+│  │  REST Controllers│  │ Persistence      │  │ Message      │  │
+│  │  @WebAdapter     │  │ Adapters         │  │ Consumers    │  │
+│  │                  │  │ @PersistenceAdptr│  │ (Kafka, SQS) │  │
+│  └────────┬─────────┘  └────────┬─────────┘  └──────┬───────┘  │
+└───────────┼─────────────────────┼────────────────────┼──────────┘
+            │    (inbound ports)  │   (outbound ports) │
+┌───────────┼─────────────────────┼────────────────────┼──────────┐
+│           │   Application Layer │                    │          │
+│           │                     │                    │          │
+│  ┌────────▼──────────────────────────────────────────▼──────┐   │
+│  │  Use Cases (@UseCase)                                     │   │
+│  │  ReserveStockService  │  ConfirmStockReservationService   │   │
+│  │  AdjustStockService   │  ExpireStockReservationService    │   │
+│  │  CreateInventoryService  │  LoadInventoryService          │   │
+│  └──────────────────────────────┬────────────────────────────┘   │
+│                                 │                               │
+│  ┌──────────────────────────────▼────────────────────────────┐   │
+│  │  Port Interfaces (Repository contracts)                   │   │
+│  │  InventoryRepository  │  StockReservationRepository       │   │
+│  │  StockMovementRepository  │  TenantRepository             │   │
+│  └───────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────┘
+                                 │
+┌────────────────────────────────▼────────────────────────────────┐
+│                         Domain Layer                            │
+│                                                                 │
+│  Aggregates: Inventory, StockReservation, StockMovement         │
+│  Enums: InventoryStatus, ReservationStatus, StockMovementType   │
+│  Exceptions: InsufficientStockException, InvalidReservation...  │
+└─────────────────────────────────────────────────────────────────┘
+```
 
-## 🚀 Getting Started
+### Layer Responsibilities
+
+| Layer | Annotation | Responsibility |
+|-------|-----------|----------------|
+| Domain | — | Pure business logic, invariants, no framework deps |
+| Application | `@UseCase` | Orchestrates domain + ports, transaction boundary |
+| Infrastructure/REST | `@WebAdapter` | HTTP in/out, DTO mapping |
+| Infrastructure/DB | `@PersistenceAdapter` | JPA + repository implementations |
+| Infrastructure/Msg | `@Component` | Kafka / SQS consumers (ACL layer) |
+
+---
+
+## Domain Model
+
+### Aggregates
+
+**`Inventory`** — Aggregate Root
+- Tracks `quantity` (total stock) and `reservedQuantity` (held for active orders)
+- `availableQuantity()` is always computed: `quantity - reservedQuantity`
+- Business methods: `reserve()`, `release()`, `confirmReservation()`, `adjust()`, `receive()`
+- Business methods enforce invariants before persistence
+
+**`StockReservation`** — Aggregate Root
+- Represents a stock hold for one order line item
+- Lifecycle: `PENDING` → `CONFIRMED` | `EXPIRED`
+- Linked to `Inventory` by `inventoryId`
+- Expires via `expires_at` timestamp, triggered by AWS EventBridge → SQS
+
+**`StockMovement`** — Entity (Audit Record)
+- Immutable record of every stock change
+- Polymorphic reference: `referenceType` + `referenceId` (e.g., `ORDER`, `ADJUSTMENT`)
+- Source of truth for stock history and reconciliation
+
+### Value Objects
+
+All identifiers are strongly typed via the `oms-core` shared module:  
+`InventoryId`, `StoreId`, `TenantId`, `ProductId`, `SKU`, `OrderId`, `ReferenceId`
+
+---
+
+## Event-Driven Integration
+
+### Consumed Events
+
+| Event | Source | Transport | Handler | Action |
+|-------|--------|-----------|---------|--------|
+| `ProductCreated` | store-service | Kafka | `ProductCreatedConsumer` | Create inventory record for new SKU |
+| `OrderCreated` | order-service | Kafka | `OrderCreatedEventConsumer` | *(in progress)* Reserve stock |
+| Reservation Expire Trigger | AWS EventBridge | SQS | `SqsReservationExpireConsumer` | Expire overdue reservations |
+
+### Anti-Corruption Layer (ACL)
+
+External integration events (e.g., `ProductCreatedEvent` published by store-service) are **not domain events**. They live in `infrastructure/message/dto/` and are mapped to internal commands before crossing the domain boundary. The domain has no awareness of external event schemas.
+
+### Reservation Expiry Flow
+
+```
+AWS EventBridge (scheduled rule)
+    └─► SQS Queue (reservation-expire)
+            └─► SqsReservationExpireConsumer
+                    └─► ExpireStockReservationService
+                            └─► ExpireByInventoryTransaction (REQUIRES_NEW per inventory)
+```
+
+Each inventory's expiry runs in an isolated `REQUIRES_NEW` transaction — a failure on one inventory does not roll back others.
+
+---
+
+## Technology Stack
+
+| Category | Technology |
+|----------|-----------|
+| Language | Java 17 |
+| Framework | Spring Boot 3.2.3 |
+| ORM | Spring Data JPA / Hibernate 6.4 |
+| Database | PostgreSQL 16 |
+| Migrations | Flyway |
+| Messaging | Apache Kafka, AWS SQS (Spring Cloud AWS) |
+| NoSQL | AWS DynamoDB (tenant metadata) |
+| Mapping | MapStruct 1.6.3 |
+| Boilerplate | Lombok |
+| API Docs | SpringDoc OpenAPI 3.0 (Swagger UI) |
+| Build | Gradle |
+| Local AWS | LocalStack |
+
+---
+
+## Project Structure
+
+```
+src/main/java/com/dotran/oms/inventory/
+│
+├── domain/                          # Pure business logic — no framework deps
+│   ├── model/
+│   │   ├── Inventory.java           # Aggregate Root
+│   │   ├── StockReservation.java    # Aggregate Root
+│   │   └── StockMovement.java       # Audit entity
+│   ├── enums/
+│   │   ├── InventoryStatus.java
+│   │   ├── ReservationStatus.java
+│   │   └── StockMovementType.java
+│   └── exception/
+│       ├── InsufficientStockException.java
+│       ├── InvalidReservationException.java
+│       └── InvalidQuantityException.java
+│
+├── application/                     # Use cases & port definitions
+│   ├── usecase/                     # Inbound port interfaces
+│   │   ├── inventory/
+│   │   └── reservation/
+│   ├── repository/                  # Outbound port interfaces
+│   │   ├── InventoryRepository.java
+│   │   ├── StockReservationRepository.java
+│   │   ├── StockMovementRepository.java
+│   │   └── TenantRepository.java
+│   ├── service/                     # Use case implementations (@UseCase)
+│   │   ├── ReserveStockService.java
+│   │   ├── ConfirmStockReservationService.java
+│   │   ├── ExpireStockReservationService.java
+│   │   ├── ExpireByInventoryTransaction.java  # REQUIRES_NEW isolation
+│   │   ├── AdjustStockService.java
+│   │   └── CreateInventoryService.java
+│   ├── command/                     # Input DTOs for use cases
+│   └── dto/                         # Output DTOs from use cases
+│
+└── infrastructure/                  # Technical implementations
+    ├── rest/                        # REST API (@WebAdapter)
+    │   ├── api/
+    │   │   ├── InventoryController.java
+    │   │   └── StockMovementController.java
+    │   ├── dto/request|response/
+    │   └── mapper/
+    ├── persistence/                 # JPA (@PersistenceAdapter)
+    │   ├── InventoryPersistenceAdapter.java
+    │   ├── entity/
+    │   ├── jpa/
+    │   │   └── SpringDataInventoryRepository.java
+    │   └── mapper/
+    └── message/                     # Event consumers (ACL)
+        ├── ProductCreatedConsumer.java
+        ├── OrderCreatedEventConsumer.java
+        ├── SqsReservationExpireConsumer.java
+        └── dto/                     # External event DTOs (not domain events)
+```
+
+---
+
+## Database Schema
+
+### Tables
+
+**`inventories`**
+```
+id                UUID PK
+tenant_id         UUID NOT NULL
+store_id          UUID NOT NULL
+store_product_id  UUID NOT NULL
+sku               VARCHAR(50) NOT NULL
+quantity          BIGINT NOT NULL DEFAULT 0     -- total physical stock
+reserved_quantity BIGINT NOT NULL DEFAULT 0     -- held for active orders
+status            VARCHAR(30) NOT NULL
+created_at / updated_at
+UNIQUE (store_id, sku)
+```
+
+**`stock_reservations`**
+```
+id              BIGINT PK (sequence, cache=20 for performance)
+tenant_id / store_id
+inventory_id    UUID FK → inventories
+order_id / order_item_id
+quantity        BIGINT NOT NULL
+status          VARCHAR(30)   -- PENDING | CONFIRMED | EXPIRED
+expires_at      TIMESTAMPTZ
+```
+
+**`stock_movements`** (append-only audit log)
+```
+id              BIGINT PK (sequence, cache=20)
+tenant_id / store_id / inventory_id
+type            VARCHAR(30)   -- STOCK_IN | STOCK_OUT | RESERVE | etc.
+quantity        BIGINT
+reference_type  VARCHAR(50)   -- e.g. ORDER, ADJUSTMENT
+reference_id    UUID          -- polymorphic FK
+reason          VARCHAR(255)
+created_at
+```
+
+### Key Indexes
+
+- `inventories`: `(store_id)`, `(sku)`, `(store_id, store_product_id)`
+- `stock_reservations`: `(order_id)`, `(inventory_id)`, `(status)`
+- `stock_movements`: `(inventory_id)`, `(reference_type, reference_id)`, `(created_at)`
+
+---
+
+## Getting Started
 
 ### Prerequisites
 
-- **Java 17+** ([Download OpenJDK](https://adoptium.net/))
-- **Gradle** (included via wrapper)
-- **PostgreSQL 12+** ([Download PostgreSQL](https://www.postgresql.org/download/))
-- **AWS CLI** (optional, for DynamoDB)
+- Java 17+
+- PostgreSQL 12+
+- LocalStack (for local AWS SQS/DynamoDB)
+- Kafka
 
 ### Database Setup
 
-1. **Create PostgreSQL database:**
 ```sql
-CREATE DATABASE store;
-CREATE SCHEMA store;
+CREATE DATABASE inventory;
+CREATE SCHEMA inventory;
 ```
 
-2. **Update credentials in `application.yaml`:**
-```yaml
-spring:
-  datasource:
-    url: jdbc:postgresql://localhost:5432/store?currentSchema=store
-    username: your_username
-    password: your_password
-```
+Flyway runs migrations automatically on startup from `src/main/resources/db/migration/`.
 
-3. **Flyway migrations run automatically on startup** ✅
+### LocalStack Setup
 
-### Build & Run
-
-**Build the project:**
 ```bash
-./gradlew build
+# Start LocalStack
+cd localstack && docker-compose up -d
+
+# Create SQS queue
+awslocal sqs create-queue --queue-name localdev-reservation-expire-queue
+
+# Create DynamoDB table
+awslocal dynamodb create-table \
+  --table-name localdev_tenant_info \
+  --attribute-definitions AttributeName=id,AttributeType=S \
+  --key-schema AttributeName=id,KeyType=HASH \
+  --billing-mode PAY_PER_REQUEST
 ```
 
-**Run the application:**
+### Run
+
 ```bash
 ./gradlew bootRun
 ```
 
-**Run in dev profile:**
-```bash
-./gradlew bootRun --args='--spring.profiles.active=localdev'
-```
-
-The application starts on **http://localhost:8048**
-
-## 📖 API Documentation
+Application starts on **http://localhost:8058**
 
 ### Swagger UI
-After starting the server, access the interactive API documentation:
 
-- **Swagger UI:** http://localhost:8048/swagger-ui.html
-- **OpenAPI JSON:** http://localhost:8048/api-docs
-
-## 🗄 Database
-
-### PostgreSQL Schema
-
-**Primary Tables:**
-- `store` - Store entities
-- `store_availability` - Availability schedules
-- `store_product` - Product catalog
-- `store_product_sku` - Product variants
-- `store_product_image` - Product images
-- `store_product_collection` - Product collections
-- `store_product_collection_item` - Collection-product relationships
-
-**Key Constraints:**
-- `store.store_code` - Unique globally (cross-tenant)
-- Multi-tenant isolation via `tenant_id` column
-- Foreign key cascades for aggregate consistency
-
-### DynamoDB
-
-**Table:** `tenant_info`
-- Stores tenant metadata
-- Configured via `app.dynamodb.*` properties
-
-### Migrations
-
-Flyway manages schema evolution automatically:
-```bash
-# Migrations run on application startup
-# Located in: src/main/resources/db/migration/
 ```
-
-
-### Performance Optimizations
-
-✅ **Batch Fetching** - `@BatchSize(size = 30)` on collections prevents N+1 queries  
-✅ **Connection Pooling** - HikariCP with tuned settings  
-✅ **IN Clause Padding** - Optimizes query plan caching  
-✅ **Open-in-View: false** - Prevents lazy loading anti-pattern
-
-## 💻 Development
-
-### IDE Setup
-
-**IntelliJ IDEA / Eclipse:**
-1. Install **Lombok plugin**
-2. Enable **annotation processing**
-3. Import as Gradle project
-
-### Code Style
-
-**Domain Models:**
-- Use `@Getter` + `@SuperBuilder` for immutability
-- No public setters in domain layer
-- Value objects are immutable
-
-**Mappers:**
-- Use MapStruct for all transformations
-- Expression syntax for complex mappings
-- Separate mappers per layer
-
-**Controllers:**
-- Thin controllers - delegate to use cases
-- Swagger annotations on all endpoints
-- Consistent response codes
-
-### Running Tests
-
-```bash
-# Run all tests
-./gradlew test
-
-# Run with coverage
-./gradlew test jacocoTestReport
+http://localhost:8058/swagger-ui.html
 ```
-
-### Build for Production
-
-```bash
-# Create executable JAR
-./gradlew bootJar
-
-# Run the JAR
-java -jar build/libs/stores-0.0.1-SNAPSHOT.jar
-```
-
-## 🔒 Security Considerations
-
-- **Multi-tenancy:** Tenant ID isolation in all queries
-- **Input Validation:** Jakarta Validation on all request DTOs
-- **SQL Injection:** JPA parameterized queries
-- **Secrets Management:** Externalize credentials (environment variables)
-- **HTTPS:** Configure SSL/TLS in production
-
-## 📝 Contributing
-
-1. Follow existing code structure and naming conventions
-2. Add tests for new features
-3. Update API documentation (Swagger annotations)
-4. Keep domain logic pure (no framework dependencies)
-5. Use value objects for type safety
-
-## 📄 License
-
-MIT-style (no license file provided). Feel free to add a LICENSE file.
 
 ---
 
-**Repository:** [domt97/stores-service](https://github.com/domt97/stores-service)  
-**Documentation:** See [docs/review](docs/review) for architectural review notes
+## API Reference
+
+### Inventory
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/v1/inventories` | Create inventory records for a product's SKUs |
+| `GET` | `/v1/inventories/{inventoryId}` | Get inventory by ID |
+| `GET` | `/v1/inventories/products/{productId}` | Get all inventories for a product |
+| `POST` | `/v1/inventories/{inventoryId}` | Adjust stock (STOCK_IN / STOCK_OUT) |
+
+### Stock Movements
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/v1/stock-movements` | Get stock movement history |
+
+> Reservation operations (reserve, confirm, expire) are triggered internally via messaging, not direct API calls.
+
+---
+
+## Configuration
+
+Key properties in `application.yaml`:
+
+```yaml
+server:
+  port: 8058
+
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/inventory?currentSchema=inventory
+
+aws:
+  region: eu-west-1
+  dynamodb:
+    table:
+      tenant-info: localdev_tenant_info
+  sqs:
+    queues:
+      reservation-expire: localdev-reservation-expire-queue
+
+spring:
+  kafka:
+    bootstrap-servers: localhost:9092
+    consumer:
+      group-id: product-consumer
+```
+
+All AWS credentials and endpoints support environment variable overrides:
+
+```
+AWS_REGION, AWS_ENDPOINT, AWS_ACCESS_KEY, AWS_SECRET_KEY
+AWS_DYNAMODB_TABLE, AWS_SQS_RESERVATION_EXPIRE_QUEUE
+```
