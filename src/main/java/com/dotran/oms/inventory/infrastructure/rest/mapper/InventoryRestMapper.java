@@ -33,6 +33,8 @@ public abstract class InventoryRestMapper {
     @Mapping(target = "inventoryId", expression = "java(idMapper.toInventoryId(inventoryId))")
     @Mapping(target = "quantity", source = "request.quantity")
     @Mapping(target = "movementType", source = "request.movementType")
+    @Mapping(target = "referenceType", source = "request.referenceType")
+    @Mapping(target = "referenceId", expression = "java(idMapper.toReferenceId(request.getReferenceId()))")
     @Mapping(target = "reason", source = "request.reason")
     public abstract AdjustStockCmd toAdjustStockCmd(UUID inventoryId, AdjustStockRequest request);
 

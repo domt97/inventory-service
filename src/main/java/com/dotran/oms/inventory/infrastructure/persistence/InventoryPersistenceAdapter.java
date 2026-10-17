@@ -10,6 +10,7 @@ import com.dotran.oms.core.domain.id.InventoryId;
 import com.dotran.oms.core.domain.id.ProductId;
 import com.dotran.oms.core.domain.id.SKU;
 import com.dotran.oms.core.domain.id.StoreId;
+import com.dotran.oms.core.domain.id.TenantId;
 import com.dotran.oms.core.exception.NotFoundException;
 import lombok.RequiredArgsConstructor;
 
@@ -139,4 +140,30 @@ public class InventoryPersistenceAdapter implements InventoryRepository {
                 .map(mapper::fromEntity)
                 .collect(toList());
     }
+
+    @Override
+    public int reserve(InventoryId inventoryId, Long quantity) {
+        return springDataInventoryRepository.reserve(inventoryId.getValue(), quantity);
+    }
+
+    @Override
+    public int confirm(InventoryId inventoryId, Long quantity) {
+        return springDataInventoryRepository.confirm(inventoryId.getValue(), quantity);
+    }
+
+    @Override
+    public int release(InventoryId inventoryId, Long quantity) {
+        return springDataInventoryRepository.release(inventoryId.getValue(), quantity);
+    }
+
+    @Override
+    public int stockIn(InventoryId inventoryId, TenantId tenantId, StoreId storeId, Long quantity) {
+        return springDataInventoryRepository.stockIn(inventoryId.getValue(), tenantId.getValue(), storeId.getValue(), quantity);
+    }
+
+    @Override
+    public int stockOut(InventoryId inventoryId, TenantId tenantId, StoreId storeId, Long quantity) {
+        return springDataInventoryRepository.stockOut(inventoryId.getValue(), tenantId.getValue(), storeId.getValue(), quantity);
+    }
+
 }

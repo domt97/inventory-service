@@ -13,8 +13,6 @@ CREATE TABLE IF NOT EXISTS inventories
 
     status             VARCHAR(30) NOT NULL,
 
-    version            BIGINT NOT NULL DEFAULT 0,
-
     created_at         TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at         TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
