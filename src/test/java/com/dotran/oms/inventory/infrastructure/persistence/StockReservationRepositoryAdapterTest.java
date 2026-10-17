@@ -1,0 +1,314 @@
+package com.dotran.oms.inventory.infrastructure.persistence;
+
+import com.dotran.oms.inventory.common.id.StockReservationId;
+import com.dotran.oms.inventory.domain.enums.ReservationStatus;
+import com.dotran.oms.inventory.domain.model.StockReservation;
+import com.dotran.oms.inventory.infrastructure.mapper.StockReservationPersistenceMapper;
+import com.dotran.oms.inventory.infrastructure.persistence.entity.StockReservationEntity;
+import com.dotran.oms.inventory.infrastructure.persistence.jpa.SpringDataStockReservationRepository;
+import com.dotran.oms.core.domain.id.InventoryId;
+import com.dotran.oms.core.domain.id.OrderId;
+import com.dotran.oms.core.domain.id.OrderItemId;
+import com.dotran.oms.core.domain.id.StoreId;
+import com.dotran.oms.core.domain.id.TenantId;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import com.dotran.oms.core.exception.NotFoundException;
+
+import java.time.Instant;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.*;
+
+@ExtendWith(MockitoExtension.class)
+@DisplayName("StockReservationRepositoryAdapter")
+class StockReservationRepositoryAdapterTest {
+
+    @Mock
+    private SpringDataStockReservationRepository springDataStockReservationRepository;
+
+    @Mock
+    private StockReservationPersistenceMapper stockReservationPersistenceMapper;
+
+    @InjectMocks
+    private StockReservationRepositoryAdapter adapter;
+
+    private TenantId tenantId;
+    private StoreId storeId;
+    private InventoryId inventoryId;
+    private OrderId orderId;
+
+    @BeforeEach
+    void setUp() {
+        tenantId = TenantId.of(UUID.randomUUID());
+        storeId = StoreId.of(UUID.randomUUID());
+        inventoryId = InventoryId.of(UUID.randomUUID());
+        orderId = OrderId.of(UUID.randomUUID());
+    }
+
+    private StockReservation buildReservation(long id) {
+        return StockReservation.builder()
+                .id(new StockReservationId(id))
+                .tenantId(tenantId)
+                .storeId(storeId)
+                .inventoryId(inventoryId)
+                .orderId(orderId)
+                .orderItemId(OrderItemId.of(UUID.randomUUID()))
+                .quantity(10L)
+                .status(ReservationStatus.RESERVED)
+                .expiresAt(Instant.now().plusSeconds(1800))
+                .createdAt(Instant.now())
+                .updatedAt(Instant.now())
+                .build();
+    }
+
+    private StockReservationEntity buildEntity(long id) {
+        StockReservationEntity entity = new StockReservationEntity();
+        entity.setId(id);
+        return entity;
+    }
+
+    @Nested
+    @DisplayName("create")
+    class Create {
+
+        @Test
+        @DisplayName("maps domain to entity, saves, and returns mapped domain")
+        void shouldCreateAndReturn() {
+            StockReservation reservation = buildReservation(1L);
+            StockReservationEntity entity = buildEntity(1L);
+            StockReservationEntity saved = buildEntity(1L);
+
+            when(stockReservationPersistenceMapper.toEntity(reservation)).thenReturn(entity);
+            when(springDataStockReservationRepository.saveAndFlush(entity)).thenReturn(saved);
+            when(stockReservationPersistenceMapper.toDomain(saved)).thenReturn(reservation);
+
+            StockReservation result = adapter.create(reservation);
+
+            assertSame(reservation, result);
+            verify(springDataStockReservationRepository).saveAndFlush(entity);
+        }
+    }
+
+    @Nested
+    @DisplayName("createBatch")
+    class CreateBatch {
+
+        @Test
+        @DisplayName("maps all, saves all, and returns all mapped domain objects")
+        void shouldCreateBatchAndReturnAll() {
+            StockReservation r1 = buildReservation(1L);
+            StockReservationEntity entity = buildEntity(1L);
+            StockReservationEntity saved = buildEntity(1L);
+
+            when(stockReservationPersistenceMapper.toEntity(r1)).thenReturn(entity);
+            when(springDataStockReservationRepository.saveAllAndFlush(List.of(entity))).thenReturn(List.of(saved));
+            when(stockReservationPersistenceMapper.toDomain(saved)).thenReturn(r1);
+
+            List<StockReservation> result = adapter.createBatch(List.of(r1));
+
+            assertEquals(1, result.size());
+            assertSame(r1, result.get(0));
+        }
+    }
+
+    @Nested
+    @DisplayName("expire single (update)")
+    class ExpireSingle {
+
+        @Test
+        @DisplayName("loads entity, updates status, saves, and returns mapped domain")
+        void shouldExpireSingleReservation() {
+            StockReservation reservation = buildReservation(1L);
+            StockReservationEntity entity = buildEntity(1L);
+            StockReservationEntity saved = buildEntity(1L);
+
+            when(springDataStockReservationRepository.findById(1L)).thenReturn(Optional.of(entity));
+            when(springDataStockReservationRepository.saveAndFlush(entity)).thenReturn(saved);
+            when(stockReservationPersistenceMapper.toDomain(saved)).thenReturn(reservation);
+
+            StockReservation result = adapter.expire(reservation);
+
+            assertSame(reservation, result);
+            verify(stockReservationPersistenceMapper).updateStatus(reservation, entity);
+        }
+
+        @Test
+        @DisplayName("throws NotFoundException when reservation to expire does not exist")
+        void shouldThrowWhenNotFound() {
+            StockReservation reservation = buildReservation(1L);
+
+            when(springDataStockReservationRepository.findById(1L)).thenReturn(Optional.empty());
+
+            assertThrows(NotFoundException.class, () -> adapter.expire(reservation));
+            verify(springDataStockReservationRepository, never()).saveAndFlush(any());
+        }
+    }
+
+    @Nested
+    @DisplayName("confirm")
+    class Confirm {
+
+        @Test
+        @DisplayName("delegates to updateBatch — throws when some IDs not found")
+        void shouldThrowWhenSomeNotFound() {
+            StockReservation r1 = buildReservation(1L);
+            StockReservation r2 = buildReservation(2L);
+
+            when(springDataStockReservationRepository.findAllById(any())).thenReturn(List.of(buildEntity(1L)));
+
+            assertThrows(IllegalStateException.class, () -> adapter.confirm(List.of(r1, r2)));
+        }
+
+        @Test
+        @DisplayName("updates all reservations and returns mapped domain objects")
+        void shouldConfirmAllReservations() {
+            StockReservation r1 = buildReservation(1L);
+            StockReservationEntity entity = buildEntity(1L);
+            StockReservationEntity saved = buildEntity(1L);
+
+            when(springDataStockReservationRepository.findAllById(any())).thenReturn(List.of(entity));
+            when(springDataStockReservationRepository.saveAllAndFlush(any())).thenReturn(List.of(saved));
+            when(stockReservationPersistenceMapper.toDomain(saved)).thenReturn(r1);
+
+            List<StockReservation> result = adapter.confirm(List.of(r1));
+
+            assertEquals(1, result.size());
+            verify(stockReservationPersistenceMapper).updateStatus(r1, entity);
+        }
+    }
+
+    @Nested
+    @DisplayName("getById")
+    class GetById {
+
+        @Test
+        @DisplayName("returns mapped domain when entity found")
+        void shouldReturnWhenFound() {
+            StockReservation reservation = buildReservation(1L);
+            StockReservationEntity entity = buildEntity(1L);
+            StockReservationId id = new StockReservationId(1L);
+
+            when(springDataStockReservationRepository.findById(1L)).thenReturn(Optional.of(entity));
+            when(stockReservationPersistenceMapper.toDomain(entity)).thenReturn(reservation);
+
+            Optional<StockReservation> result = adapter.getById(id);
+
+            assertTrue(result.isPresent());
+            assertSame(reservation, result.get());
+        }
+
+        @Test
+        @DisplayName("returns empty when entity not found")
+        void shouldReturnEmptyWhenNotFound() {
+            StockReservationId id = new StockReservationId(99L);
+
+            when(springDataStockReservationRepository.findById(99L)).thenReturn(Optional.empty());
+
+            Optional<StockReservation> result = adapter.getById(id);
+
+            assertTrue(result.isEmpty());
+        }
+    }
+
+    @Nested
+    @DisplayName("expire batch (updateBatch)")
+    class ExpireBatch {
+
+        @Test
+        @DisplayName("throws IllegalStateException when some reservation IDs are not found in DB")
+        void shouldThrowWhenSomeReservationsNotFound() {
+            StockReservation r1 = buildReservation(1L);
+            StockReservation r2 = buildReservation(2L);
+
+            // only ID 1 found
+            when(springDataStockReservationRepository.findAllById(any())).thenReturn(List.of(buildEntity(1L)));
+
+            assertThrows(IllegalStateException.class,
+                    () -> adapter.expire(List.of(r1, r2)));
+        }
+
+        @Test
+        @DisplayName("saves all entities when all IDs found and returns mapped domain objects")
+        void shouldSaveAllWhenAllFound() {
+            StockReservation r1 = buildReservation(1L);
+            StockReservationEntity entity = buildEntity(1L);
+            StockReservationEntity saved = buildEntity(1L);
+
+            when(springDataStockReservationRepository.findAllById(any())).thenReturn(List.of(entity));
+            when(springDataStockReservationRepository.saveAllAndFlush(any())).thenReturn(List.of(saved));
+            when(stockReservationPersistenceMapper.toDomain(saved)).thenReturn(r1);
+
+            List<StockReservation> result = adapter.expire(List.of(r1));
+
+            assertEquals(1, result.size());
+            verify(springDataStockReservationRepository).saveAllAndFlush(any());
+        }
+    }
+
+    @Nested
+    @DisplayName("getExpiredReservations")
+    class GetExpiredReservations {
+
+        @Test
+        @DisplayName("queries by RESERVED status and expiry timestamp, returns mapped domain objects")
+        void shouldReturnExpiredReservations() {
+            Instant now = Instant.now();
+            StockReservationEntity entity = buildEntity(1L);
+            StockReservation reservation = buildReservation(1L);
+
+            when(springDataStockReservationRepository.findByStatusAndExpiresAtBefore(ReservationStatus.RESERVED, now))
+                    .thenReturn(List.of(entity));
+            when(stockReservationPersistenceMapper.toDomain(entity)).thenReturn(reservation);
+
+            List<StockReservation> result = adapter.getExpiredReservations(now);
+
+            assertEquals(1, result.size());
+            verify(springDataStockReservationRepository).findByStatusAndExpiresAtBefore(ReservationStatus.RESERVED, now);
+        }
+
+        @Test
+        @DisplayName("returns empty list when no expired reservations found")
+        void shouldReturnEmptyWhenNoneExpired() {
+            Instant now = Instant.now();
+            when(springDataStockReservationRepository.findByStatusAndExpiresAtBefore(any(), any()))
+                    .thenReturn(List.of());
+
+            List<StockReservation> result = adapter.getExpiredReservations(now);
+
+            assertTrue(result.isEmpty());
+        }
+    }
+
+    @Nested
+    @DisplayName("getByOrderId")
+    class GetByOrderId {
+
+        @Test
+        @DisplayName("queries by order UUID and returns mapped domain objects")
+        void shouldReturnReservationsByOrder() {
+            UUID orderUUID = orderId.getValue();
+            StockReservationEntity entity = buildEntity(1L);
+            StockReservation reservation = buildReservation(1L);
+
+            when(springDataStockReservationRepository.findByOrderId(orderUUID)).thenReturn(List.of(entity));
+            when(stockReservationPersistenceMapper.toDomain(entity)).thenReturn(reservation);
+
+            List<StockReservation> result = adapter.getByOrderId(orderId);
+
+            assertEquals(1, result.size());
+            verify(springDataStockReservationRepository).findByOrderId(orderUUID);
+        }
+    }
+}
