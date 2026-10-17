@@ -1,0 +1,1815 @@
+<title>Inventory Service DDD Analysis</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Plus+Jakarta+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<style>
+  /* ── Token system ──────────────────────────────────── */
+  :root {
+    --ground:        #F7F8FA;
+    --surface:       #FFFFFF;
+    --surface-2:     #EDF1F9;
+    --border:        #DDE2ED;
+    --text:          #1C2333;
+    --text-muted:    #5B6578;
+    --text-micro:    #8892A0;
+    --accent:        #1E40AF;
+    --accent-dim:    #DBEAFE;
+    --accent-mid:    #3B82F6;
+
+    --good-text:     #065F46;
+    --good-bg:       #ECFDF5;
+    --good-border:   #6EE7B7;
+    --warn-text:     #78350F;
+    --warn-bg:       #FFFBEB;
+    --warn-border:   #FCD34D;
+    --error-text:    #7F1D1D;
+    --error-bg:      #FEF2F2;
+    --error-border:  #FCA5A5;
+    --note-text:     #374151;
+    --note-bg:       #F9FAFB;
+    --note-border:   #D1D5DB;
+
+    --radius:        6px;
+    --radius-lg:     10px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:        #0C1017;
+      --surface:       #131920;
+      --surface-2:     #1A2235;
+      --border:        #1E2D40;
+      --text:          #E2E8F0;
+      --text-muted:    #94A3B8;
+      --text-micro:    #64748B;
+      --accent:        #60A5FA;
+      --accent-dim:    #1E3A5F;
+      --accent-mid:    #93C5FD;
+
+      --good-text:     #6EE7B7;
+      --good-bg:       #022C22;
+      --good-border:   #065F46;
+      --warn-text:     #FCD34D;
+      --warn-bg:       #2D1A00;
+      --warn-border:   #92400E;
+      --error-text:    #FCA5A5;
+      --error-bg:      #2D0A0A;
+      --error-border:  #7F1D1D;
+      --note-text:     #CBD5E1;
+      --note-bg:       #1E293B;
+      --note-border:   #334155;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ground:        #0C1017;
+    --surface:       #131920;
+    --surface-2:     #1A2235;
+    --border:        #1E2D40;
+    --text:          #E2E8F0;
+    --text-muted:    #94A3B8;
+    --text-micro:    #64748B;
+    --accent:        #60A5FA;
+    --accent-dim:    #1E3A5F;
+    --accent-mid:    #93C5FD;
+
+    --good-text:     #6EE7B7;
+    --good-bg:       #022C22;
+    --good-border:   #065F46;
+    --warn-text:     #FCD34D;
+    --warn-bg:       #2D1A00;
+    --warn-border:   #92400E;
+    --error-text:    #FCA5A5;
+    --error-bg:      #2D0A0A;
+    --error-border:  #7F1D1D;
+    --note-text:     #CBD5E1;
+    --note-bg:       #1E293B;
+    --note-border:   #334155;
+  }
+
+  /* ── Reset / base ──────────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; }
+
+  body {
+    background: var(--ground);
+    color: var(--text);
+    font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+    font-size: 15px;
+    line-height: 1.7;
+    margin: 0;
+    padding: 0;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; animation: none !important; }
+  }
+
+  /* ── Typography ────────────────────────────────────── */
+  h1, h2, h3 {
+    font-family: 'Fraunces', Georgia, serif;
+    text-wrap: balance;
+    line-height: 1.2;
+    margin: 0 0 0.5rem;
+  }
+  h1 { font-size: 2.25rem; font-weight: 700; letter-spacing: -0.02em; }
+  h2 { font-size: 1.5rem; font-weight: 600; letter-spacing: -0.015em; }
+  h3 { font-size: 1.1rem; font-weight: 600; color: var(--text); }
+  h4 { font-size: 0.875rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); margin: 0 0 0.75rem; }
+
+  p { margin: 0 0 1rem; max-width: 70ch; }
+  p:last-child { margin-bottom: 0; }
+
+  code, .mono {
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    font-size: 0.83em;
+    background: var(--surface-2);
+    color: var(--accent);
+    padding: 0.1em 0.4em;
+    border-radius: 3px;
+    border: 1px solid var(--border);
+  }
+
+  a { color: var(--accent); text-decoration: none; }
+
+  /* ── Layout ────────────────────────────────────────── */
+  .page-wrap {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 0 2rem 5rem;
+  }
+
+  .section { margin-bottom: 3.5rem; }
+
+  .section-divider {
+    height: 1px;
+    background: var(--border);
+    margin: 3rem 0;
+  }
+
+  /* ── Header ────────────────────────────────────────── */
+  .page-header {
+    padding: 3rem 0 2.5rem;
+    border-bottom: 2px solid var(--border);
+    margin-bottom: 3rem;
+  }
+
+  .eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--accent);
+    background: var(--accent-dim);
+    padding: 0.3em 0.75em;
+    border-radius: 999px;
+    margin-bottom: 1rem;
+  }
+
+  .page-meta {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    margin-top: 1.25rem;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    flex-wrap: wrap;
+  }
+
+  .page-meta-item { display: flex; align-items: center; gap: 0.4rem; }
+
+  /* ── Conformance dashboard ─────────────────────────── */
+  .dashboard {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 1rem;
+    margin-bottom: 2rem;
+  }
+
+  .metric-tile {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 1.25rem 1.5rem;
+  }
+
+  .metric-tile .label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--text-muted);
+    margin-bottom: 0.35rem;
+  }
+
+  .metric-tile .value {
+    font-family: 'Fraunces', serif;
+    font-size: 2rem;
+    font-weight: 700;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .metric-tile .subtext {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-top: 0.3rem;
+  }
+
+  .metric-tile.good   .value { color: var(--good-text); }
+  .metric-tile.warn   .value { color: var(--warn-text); }
+  .metric-tile.error  .value { color: var(--error-text); }
+  .metric-tile.accent .value { color: var(--accent); }
+
+  /* ── Bounded context diagram ───────────────────────── */
+  .bc-diagram {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    gap: 0;
+    margin: 1.5rem 0;
+    overflow-x: auto;
+  }
+
+  .bc-box {
+    background: var(--surface);
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 1rem 1.25rem;
+  }
+
+  .bc-box.focus {
+    border-color: var(--accent);
+    border-width: 2px;
+    background: var(--accent-dim);
+  }
+
+  .bc-box .bc-name {
+    font-family: 'Fraunces', serif;
+    font-size: 0.95rem;
+    font-weight: 600;
+    margin-bottom: 0.75rem;
+    color: var(--text);
+  }
+
+  .bc-box.focus .bc-name { color: var(--accent); }
+
+  .bc-event {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+    padding: 0.2em 0.6em;
+    border-radius: 3px;
+    display: inline-block;
+    margin: 0.2rem 0;
+  }
+
+  .bc-event.consumed {
+    background: var(--good-bg);
+    color: var(--good-text);
+    border: 1px solid var(--good-border);
+  }
+
+  .bc-event.missing {
+    background: var(--warn-bg);
+    color: var(--warn-text);
+    border: 1px solid var(--warn-border);
+    text-decoration: line-through;
+  }
+
+  .bc-arrow {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 0 0.75rem;
+    gap: 1rem;
+    min-width: 90px;
+  }
+
+  .arrow-label {
+    font-size: 0.65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-micro);
+    text-align: center;
+    white-space: nowrap;
+  }
+
+  .arrow-line {
+    height: 2px;
+    width: 70px;
+    background: var(--border);
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+  }
+
+  .arrow-line::after {
+    content: '';
+    border-top: 5px solid transparent;
+    border-bottom: 5px solid transparent;
+    border-left: 7px solid var(--border);
+    position: absolute;
+    right: -2px;
+  }
+
+  /* ── Layer diagram ─────────────────────────────────── */
+  .layer-diagram { margin: 1.5rem 0; }
+
+  .layer {
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    margin-bottom: -1px;
+  }
+
+  .layer-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.6rem 1.25rem;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface-2);
+  }
+
+  .layer-dot {
+    width: 9px; height: 9px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .layer-name {
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--text-muted);
+  }
+
+  .layer-note {
+    margin-left: auto;
+    font-size: 0.68rem;
+    color: var(--text-micro);
+    font-style: italic;
+  }
+
+  .layer-body {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 0;
+    background: var(--surface);
+  }
+
+  .layer-col {
+    padding: 1rem 1.25rem;
+    border-right: 1px solid var(--border);
+  }
+
+  .layer-col:last-child { border-right: none; }
+
+  .layer-col-title {
+    font-size: 0.68rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-micro);
+    margin-bottom: 0.6rem;
+  }
+
+  .layer-item {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    line-height: 1.9;
+    display: block;
+  }
+
+  .layer-item.highlight { color: var(--accent); font-weight: 500; }
+  .layer-item.issue     { color: var(--warn-text); }
+  .layer-item.stub      { color: var(--text-micro); font-style: italic; }
+
+  .layer.domain   { border-color: var(--accent); }
+  .layer.app      { border-color: #7C3AED; }
+  .layer.infra    { border-color: var(--text-muted); }
+
+  .layer.domain   .layer-dot { background: var(--accent); }
+  .layer.app      .layer-dot { background: #7C3AED; }
+  .layer.infra    .layer-dot { background: var(--text-muted); }
+
+  /* ── Aggregate cards ───────────────────────────────── */
+  .aggregate-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 1rem;
+    margin: 1.25rem 0;
+  }
+
+  .agg-card {
+    background: var(--surface);
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+  }
+
+  .agg-header {
+    padding: 0.85rem 1.25rem;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: baseline;
+    gap: 0.6rem;
+    background: var(--surface-2);
+  }
+
+  .agg-name {
+    font-family: 'Fraunces', serif;
+    font-weight: 600;
+    font-size: 1rem;
+  }
+
+  .agg-role {
+    font-size: 0.68rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    padding: 0.15em 0.55em;
+    border-radius: 3px;
+  }
+
+  .tag-ar   { background: var(--accent-dim); color: var(--accent); }
+  .tag-e    { background: var(--surface-2); color: var(--text-muted); border: 1px solid var(--border); }
+  .tag-vc   { background: #F3E8FF; color: #6D28D9; }
+  .tag-de   { background: var(--warn-bg); color: var(--warn-text); }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .tag-vc { background: #2D1B69; color: #C4B5FD; }
+    :root:not([data-theme="light"]) .tag-de { background: var(--warn-bg); color: var(--warn-text); }
+  }
+  :root[data-theme="dark"] .tag-vc { background: #2D1B69; color: #C4B5FD; }
+  :root[data-theme="dark"] .tag-de { background: var(--warn-bg); color: var(--warn-text); }
+
+  .agg-body { padding: 1rem 1.25rem; }
+
+  .agg-section { margin-bottom: 0.85rem; }
+  .agg-section:last-child { margin-bottom: 0; }
+
+  .agg-section-label {
+    font-size: 0.65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-micro);
+    margin-bottom: 0.35rem;
+  }
+
+  .method-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+  }
+
+  .method {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    background: var(--surface-2);
+    color: var(--text-muted);
+    padding: 0.15em 0.5em;
+    border-radius: 3px;
+    border: 1px solid var(--border);
+  }
+
+  .method.domain-method { color: var(--accent); border-color: var(--accent-dim); background: var(--accent-dim); }
+
+  .field-list { display: flex; flex-direction: column; gap: 0.2rem; }
+
+  .field {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--text-muted);
+  }
+
+  .field .type { color: var(--text-micro); }
+
+  /* ── Use-case table ────────────────────────────────── */
+  .uc-table-wrap { overflow-x: auto; margin: 1.25rem 0; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.83rem;
+  }
+
+  th {
+    text-align: left;
+    padding: 0.5rem 1rem;
+    font-size: 0.68rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+    background: var(--surface-2);
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+
+  td {
+    padding: 0.65rem 1rem;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+
+  tr:last-child td { border-bottom: none; }
+  tbody tr:hover { background: var(--surface-2); }
+
+  .uc-name { font-family: 'JetBrains Mono', monospace; font-size: 0.78rem; color: var(--accent); }
+
+  .trigger-badge {
+    font-size: 0.68rem;
+    font-weight: 500;
+    padding: 0.15em 0.55em;
+    border-radius: 3px;
+    white-space: nowrap;
+  }
+
+  .trigger-http    { background: #EEF2FF; color: #3730A3; border: 1px solid #C7D2FE; }
+  .trigger-kafka   { background: #FFF7ED; color: #9A3412; border: 1px solid #FDBA74; }
+  .trigger-sqs     { background: #F0FDF4; color: #14532D; border: 1px solid #86EFAC; }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .trigger-http  { background: #1E1B4B; color: #A5B4FC; border-color: #312E81; }
+    :root:not([data-theme="light"]) .trigger-kafka { background: #2C1810; color: #FDBA74; border-color: #7C2D12; }
+    :root:not([data-theme="light"]) .trigger-sqs   { background: #052E16; color: #86EFAC; border-color: #166534; }
+  }
+  :root[data-theme="dark"] .trigger-http  { background: #1E1B4B; color: #A5B4FC; border-color: #312E81; }
+  :root[data-theme="dark"] .trigger-kafka { background: #2C1810; color: #FDBA74; border-color: #7C2D12; }
+  :root[data-theme="dark"] .trigger-sqs   { background: #052E16; color: #86EFAC; border-color: #166534; }
+
+  .stub-tag {
+    font-size: 0.65rem;
+    background: var(--warn-bg);
+    color: var(--warn-text);
+    padding: 0.15em 0.5em;
+    border-radius: 3px;
+    border: 1px solid var(--warn-border);
+    margin-left: 0.35rem;
+  }
+
+  /* ── Findings ──────────────────────────────────────── */
+  .finding {
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border);
+    border-left-width: 4px;
+    background: var(--surface);
+    margin-bottom: 1rem;
+    overflow: hidden;
+  }
+
+  .finding.critical { border-left-color: #DC2626; }
+  .finding.high     { border-left-color: #D97706; }
+  .finding.medium   { border-left-color: #2563EB; }
+  .finding.low      { border-left-color: #9CA3AF; }
+  .finding.good     { border-left-color: #059669; }
+
+  .finding-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+    padding: 1rem 1.25rem;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .finding-header:hover { background: var(--surface-2); }
+
+  .severity-badge {
+    flex-shrink: 0;
+    font-size: 0.63rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    padding: 0.2em 0.65em;
+    border-radius: 3px;
+    margin-top: 0.15rem;
+  }
+
+  .finding.critical .severity-badge { background: var(--error-bg);  color: var(--error-text); border: 1px solid var(--error-border); }
+  .finding.high     .severity-badge { background: var(--warn-bg);   color: var(--warn-text);  border: 1px solid var(--warn-border); }
+  .finding.medium   .severity-badge { background: var(--accent-dim); color: var(--accent);    border: 1px solid #BFDBFE; }
+  .finding.low      .severity-badge { background: var(--surface-2); color: var(--text-muted); border: 1px solid var(--border); }
+  .finding.good     .severity-badge { background: var(--good-bg);   color: var(--good-text);  border: 1px solid var(--good-border); }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .finding.medium .severity-badge { border-color: #1D4ED8; }
+  }
+  :root[data-theme="dark"] .finding.medium .severity-badge { border-color: #1D4ED8; }
+
+  .finding-title {
+    font-weight: 600;
+    font-size: 0.9rem;
+    line-height: 1.4;
+    flex: 1;
+  }
+
+  .finding-toggle {
+    font-size: 0.7rem;
+    color: var(--text-micro);
+    flex-shrink: 0;
+    margin-top: 0.25rem;
+    transition: transform 0.2s ease;
+  }
+
+  .finding-body {
+    padding: 0 1.25rem 1.25rem;
+    border-top: 1px solid var(--border);
+    margin-top: 0;
+  }
+
+  .finding-body.hidden { display: none; }
+
+  .finding-section { margin-top: 0.85rem; }
+
+  .finding-section-label {
+    font-size: 0.65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-micro);
+    margin-bottom: 0.3rem;
+  }
+
+  .finding-section p { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0; }
+
+  .location-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    background: var(--surface-2);
+    color: var(--text-muted);
+    padding: 0.25em 0.65em;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    margin: 0.15rem 0.15rem 0.15rem 0;
+    line-height: 1.5;
+  }
+
+  /* ── Recommendation list ───────────────────────────── */
+  .rec-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    margin: 1.25rem 0;
+  }
+
+  .rec-item {
+    display: grid;
+    grid-template-columns: 28px 1fr;
+    gap: 1rem;
+    align-items: start;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 1rem 1.25rem;
+  }
+
+  .rec-num {
+    font-family: 'Fraunces', serif;
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    line-height: 1;
+    padding-top: 0.15rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .rec-priority {
+    font-size: 0.65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 0.15em 0.55em;
+    border-radius: 3px;
+    vertical-align: middle;
+    margin-left: 0.5rem;
+  }
+
+  .priority-p0 { background: var(--error-bg);  color: var(--error-text);  border: 1px solid var(--error-border); }
+  .priority-p1 { background: var(--warn-bg);   color: var(--warn-text);   border: 1px solid var(--warn-border); }
+  .priority-p2 { background: var(--accent-dim); color: var(--accent);      border: 1px solid #BFDBFE; }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .priority-p2 { border-color: #1D4ED8; }
+  }
+  :root[data-theme="dark"] .priority-p2 { border-color: #1D4ED8; }
+
+  .rec-title { font-weight: 600; font-size: 0.9rem; margin-bottom: 0.35rem; }
+  .rec-desc  { font-size: 0.83rem; color: var(--text-muted); }
+
+  /* ── Misc ──────────────────────────────────────────── */
+  .vo-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin: 0.75rem 0;
+  }
+
+  .vo-chip {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+    padding: 0.25em 0.7em;
+    border-radius: 4px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+  }
+
+  .vo-chip.core  { border-color: var(--accent-dim); color: var(--accent); }
+  .vo-chip.local { border-color: #DDD6FE; color: #5B21B6; }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .vo-chip.local { border-color: #4C1D95; color: #C4B5FD; }
+  }
+  :root[data-theme="dark"] .vo-chip.local { border-color: #4C1D95; color: #C4B5FD; }
+
+  .findings-group-label {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin: 1.75rem 0 0.75rem;
+  }
+
+  .findings-group-label h3 { margin: 0; }
+
+  .findings-count {
+    font-size: 0.75rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    padding: 0.15em 0.6em;
+    border-radius: 999px;
+  }
+
+  .count-critical { background: var(--error-bg); color: var(--error-text); }
+  .count-high     { background: var(--warn-bg);  color: var(--warn-text); }
+  .count-medium   { background: var(--accent-dim); color: var(--accent); }
+  .count-low      { background: var(--surface-2); color: var(--text-muted); }
+  .count-good     { background: var(--good-bg);  color: var(--good-text); }
+
+  .inline-good  { color: var(--good-text); font-weight: 600; }
+  .inline-warn  { color: var(--warn-text); font-weight: 600; }
+  .inline-error { color: var(--error-text); font-weight: 600; }
+
+  .note-block {
+    background: var(--note-bg);
+    border: 1px solid var(--note-border);
+    border-radius: var(--radius);
+    padding: 0.85rem 1.1rem;
+    font-size: 0.83rem;
+    color: var(--note-text);
+    margin: 1rem 0;
+  }
+
+  @keyframes fade-up {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .section { animation: fade-up 0.35s ease both; }
+  .section:nth-child(2)  { animation-delay: 0.05s; }
+  .section:nth-child(3)  { animation-delay: 0.10s; }
+  .section:nth-child(4)  { animation-delay: 0.15s; }
+  .section:nth-child(5)  { animation-delay: 0.20s; }
+  .section:nth-child(6)  { animation-delay: 0.25s; }
+  .section:nth-child(7)  { animation-delay: 0.30s; }
+</style>
+
+<div class="page-wrap">
+
+  <!-- ── Header ──────────────────────────────────────── -->
+  <header class="page-header">
+    <div class="eyebrow">Order Management System · Inventory Service</div>
+    <h1>DDD Architecture Review</h1>
+    <p style="max-width:60ch; color:var(--text-muted); font-size:0.9rem; margin-top:0.5rem;">
+      Bounded context analysis, hexagonal layer conformance, and domain model findings for
+      <code>com.dotran.oms.inventory</code>.
+    </p>
+    <div class="page-meta">
+      <span class="page-meta-item">
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6.5"/><path d="M8 5v3.5l2 2"/></svg>
+        Reviewed 2026-10-16
+      </span>
+      <span class="page-meta-item">
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="12" height="10" rx="1.5"/><path d="M5 3V1.5M11 3V1.5M2 7h12"/></svg>
+        Branch: develop
+      </span>
+      <span class="page-meta-item">
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 2L10.5 7H14L11 10l1 4L8 12l-4 2 1-4L2 7h3.5L8 2z"/></svg>
+        Patterns: DDD · Hexagonal · Outbox (partial)
+      </span>
+    </div>
+  </header>
+
+  <!-- ── 1. Executive Summary ─────────────────────────── -->
+  <section class="section">
+    <h4>Executive Summary</h4>
+    <div class="dashboard">
+      <div class="metric-tile accent">
+        <div class="label">DDD Conformance</div>
+        <div class="value">72%</div>
+        <div class="subtext">Core patterns applied; key gaps remain</div>
+      </div>
+      <div class="metric-tile error">
+        <div class="label">Critical Issues</div>
+        <div class="value">2</div>
+        <div class="subtext">Domain invariant violation + missing Outbox</div>
+      </div>
+      <div class="metric-tile warn">
+        <div class="label">High Issues</div>
+        <div class="value">3</div>
+        <div class="subtext">Infrastructure leak + domain bypass</div>
+      </div>
+      <div class="metric-tile good">
+        <div class="label">Bounded Contexts</div>
+        <div class="value">1</div>
+        <div class="subtext">Well-isolated; consumes 2 upstream events</div>
+      </div>
+    </div>
+    <p>
+      The Inventory service correctly applies the structural shell of Hexagonal Architecture — use-case ports,
+      adapter annotations, and repository interfaces live in the right layers. The <code>Inventory</code> aggregate
+      root carries meaningful business behavior and domain exceptions are well-named. However, two critical defects
+      undermine correctness: the <strong>Outbox pattern is absent</strong> despite being a stated design goal, and
+      <strong><code>ConfirmStockReservationService</code> never updates inventory quantities</strong> after confirming
+      a reservation, leaving the aggregate in a permanently inconsistent state.
+    </p>
+  </section>
+
+  <div class="section-divider"></div>
+
+  <!-- ── 2. Bounded Context ──────────────────────────── -->
+  <section class="section">
+    <h2>Bounded Context Map</h2>
+    <p>
+      This service owns a single bounded context: <strong>Inventory</strong>. It acts as a
+      <em>downstream conformist</em> to the Product and Order contexts, consuming their published events
+      without owning their concepts.
+    </p>
+
+    <div class="bc-diagram">
+      <!-- Product BC -->
+      <div class="bc-box">
+        <div class="bc-name">Product Context</div>
+        <div style="display:flex;flex-direction:column;gap:0.3rem;">
+          <div>
+            <span style="font-size:0.65rem;color:var(--text-micro);text-transform:uppercase;letter-spacing:0.05em;">Publishes</span>
+          </div>
+          <span class="bc-event consumed">ProductCreated ✓</span>
+        </div>
+      </div>
+
+      <!-- Arrow left -->
+      <div class="bc-arrow">
+        <div class="arrow-label">Kafka</div>
+        <div class="arrow-line"></div>
+        <div class="arrow-label">Kafka</div>
+        <div class="arrow-line" style="transform:scaleX(-1)"></div>
+      </div>
+
+      <!-- Inventory BC (focus) -->
+      <div class="bc-box focus" style="grid-column:1;grid-row:1"><!-- handled by JS flow --></div>
+    </div>
+
+    <!-- Cleaner flat layout -->
+    <div style="display:grid;grid-template-columns:1fr 80px 1.3fr 80px 1fr;align-items:center;gap:0;overflow-x:auto;margin:1.5rem 0;">
+
+      <div class="bc-box">
+        <div class="bc-name">Product BC</div>
+        <div style="margin-bottom:0.4rem;font-size:0.65rem;color:var(--text-micro);text-transform:uppercase;letter-spacing:.05em">Publishes</div>
+        <span class="bc-event consumed">ProductCreated</span>
+      </div>
+
+      <div style="display:flex;flex-direction:column;align-items:center;gap:0.4rem;padding:0 0.5rem;">
+        <div class="arrow-line" style="width:100%;"></div>
+        <span style="font-size:0.6rem;color:var(--text-micro);text-transform:uppercase;letter-spacing:0.05em;">Kafka</span>
+      </div>
+
+      <div class="bc-box focus">
+        <div class="bc-name">Inventory BC  <small style="font-size:0.65rem;opacity:.7;">← This Service</small></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;margin-top:0.5rem;">
+          <div>
+            <div style="font-size:0.65rem;color:var(--accent);text-transform:uppercase;letter-spacing:.05em;margin-bottom:.25rem">Consumes</div>
+            <div style="display:flex;flex-direction:column;gap:0.2rem;">
+              <span class="bc-event consumed">ProductCreated</span>
+              <span class="bc-event missing">OrderCreated (stub)</span>
+            </div>
+          </div>
+          <div>
+            <div style="font-size:0.65rem;color:var(--warn-text);text-transform:uppercase;letter-spacing:.05em;margin-bottom:.25rem">Should Publish</div>
+            <div style="display:flex;flex-direction:column;gap:0.2rem;">
+              <span class="bc-event missing">StockReserved</span>
+              <span class="bc-event missing">ReservationExpired</span>
+              <span class="bc-event missing">StockAdjusted</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;align-items:center;gap:0.4rem;padding:0 0.5rem;">
+        <div class="arrow-line" style="width:100%;transform:scaleX(-1)"></div>
+        <span style="font-size:0.6rem;color:var(--text-micro);text-transform:uppercase;letter-spacing:0.05em;">Kafka</span>
+      </div>
+
+      <div class="bc-box">
+        <div class="bc-name">Order BC</div>
+        <div style="margin-bottom:0.4rem;font-size:0.65rem;color:var(--text-micro);text-transform:uppercase;letter-spacing:.05em">Publishes</div>
+        <span class="bc-event consumed">OrderCreated</span>
+        <div style="margin-top:.4rem;font-size:0.65rem;color:var(--text-micro);text-transform:uppercase;letter-spacing:.05em">Expects</div>
+        <span class="bc-event missing">StockReserved</span>
+      </div>
+
+    </div>
+
+    <div class="note-block">
+      <strong>Outbox gap:</strong> The Inventory BC should publish domain events to downstream contexts
+      (Order, Warehouse, Analytics) via the Outbox pattern — but no outbox table exists in the schema
+      and no event publisher is implemented. Events shown in <span class="bc-event missing" style="display:inline;">strikethrough</span> are absent.
+    </div>
+  </section>
+
+  <div class="section-divider"></div>
+
+  <!-- ── 3. Hexagonal Architecture ────────────────────── -->
+  <section class="section">
+    <h2>Hexagonal Architecture Map</h2>
+    <p>Package layout across the three hexagonal layers. Items marked in amber indicate layer violations.</p>
+
+    <div class="layer-diagram">
+
+      <!-- Inbound adapters -->
+      <div class="layer infra" style="border-radius:var(--radius-lg) var(--radius-lg) 0 0;">
+        <div class="layer-header">
+          <div class="layer-dot"></div>
+          <div class="layer-name">Infrastructure Layer — Inbound Adapters</div>
+          <div class="layer-note">infrastructure.*</div>
+        </div>
+        <div class="layer-body" style="grid-template-columns:repeat(auto-fill,minmax(200px,1fr))">
+          <div class="layer-col">
+            <div class="layer-col-title">REST Adapters (@WebAdapter)</div>
+            <span class="layer-item highlight">InventoryController</span>
+            <span class="layer-item highlight">StockMovementController</span>
+          </div>
+          <div class="layer-col">
+            <div class="layer-col-title">Message Adapters</div>
+            <span class="layer-item highlight">ProductCreatedConsumer</span>
+            <span class="layer-item highlight">SqsReservationExpireConsumer</span>
+            <span class="layer-item issue">OrderCreatedEventConsumer (stub)</span>
+          </div>
+          <div class="layer-col">
+            <div class="layer-col-title">Outbound Adapters (@PersistenceAdapter)</div>
+            <span class="layer-item highlight">InventoryPersistenceAdapter</span>
+            <span class="layer-item highlight">StockMovementRepositoryAdapter</span>
+            <span class="layer-item highlight">StockReservationRepositoryAdapter</span>
+          </div>
+          <div class="layer-col">
+            <div class="layer-col-title">JPA / Entities</div>
+            <span class="layer-item">InventoryEntity</span>
+            <span class="layer-item">StockReservationEntity</span>
+            <span class="layer-item">StockMovementEntity</span>
+            <span class="layer-item">SpringDataInventoryRepository</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- App layer -->
+      <div class="layer app">
+        <div class="layer-header">
+          <div class="layer-dot"></div>
+          <div class="layer-name">Application Layer — Use Cases &amp; Ports</div>
+          <div class="layer-note">application.*</div>
+        </div>
+        <div class="layer-body" style="grid-template-columns:repeat(auto-fill,minmax(200px,1fr))">
+          <div class="layer-col">
+            <div class="layer-col-title">Inbound Ports (Use Cases)</div>
+            <span class="layer-item highlight">CreateInventoryUseCase</span>
+            <span class="layer-item highlight">AdjustStockUseCase</span>
+            <span class="layer-item highlight">LoadInventoryUseCase</span>
+            <span class="layer-item highlight">ReserveStockUseCase</span>
+            <span class="layer-item highlight">ConfirmStockReservationUseCase</span>
+            <span class="layer-item highlight">ExpireStockReservationUseCase</span>
+            <span class="layer-item highlight">GetStockMovementsUseCase</span>
+            <span class="layer-item stub">ReleaseStockReservationUseCase (empty)</span>
+          </div>
+          <div class="layer-col">
+            <div class="layer-col-title">Services (@UseCase)</div>
+            <span class="layer-item highlight">CreateInventoryService</span>
+            <span class="layer-item highlight">AdjustStockService</span>
+            <span class="layer-item issue">  ↳ depends on DynamoDbTenantInfoRepo</span>
+            <span class="layer-item highlight">ReserveStockService</span>
+            <span class="layer-item highlight">ConfirmStockReservationService</span>
+            <span class="layer-item issue">  ↳ never calls inventory.confirmReservation()</span>
+            <span class="layer-item highlight">ExpireStockReservationService</span>
+            <span class="layer-item highlight">ExpireByInventoryTransaction</span>
+          </div>
+          <div class="layer-col">
+            <div class="layer-col-title">Outbound Ports (Repositories)</div>
+            <span class="layer-item highlight">InventoryRepository</span>
+            <span class="layer-item issue">  ↳ reserve() leaks SQL semantics</span>
+            <span class="layer-item highlight">StockMovementRepository</span>
+            <span class="layer-item highlight">StockReservationRepository</span>
+          </div>
+          <div class="layer-col">
+            <div class="layer-col-title">Commands / DTOs</div>
+            <span class="layer-item">CreateInventoryCmd</span>
+            <span class="layer-item">ReserveStockCmd</span>
+            <span class="layer-item">AdjustStockCmd</span>
+            <span class="layer-item">ConfirmStockReservationCmd</span>
+            <span class="layer-item">InventoryDetailDto</span>
+            <span class="layer-item">StockMovementDto</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Domain layer -->
+      <div class="layer domain" style="border-radius:0 0 var(--radius-lg) var(--radius-lg);">
+        <div class="layer-header">
+          <div class="layer-dot"></div>
+          <div class="layer-name">Domain Layer — Pure Business Logic</div>
+          <div class="layer-note">domain.*</div>
+        </div>
+        <div class="layer-body" style="grid-template-columns:repeat(auto-fill,minmax(200px,1fr))">
+          <div class="layer-col">
+            <div class="layer-col-title">Aggregates / Entities</div>
+            <span class="layer-item highlight">Inventory (AR)</span>
+            <span class="layer-item highlight">StockReservation</span>
+            <span class="layer-item highlight">StockMovement</span>
+          </div>
+          <div class="layer-col">
+            <div class="layer-col-title">Exceptions</div>
+            <span class="layer-item">InsufficientStockException</span>
+            <span class="layer-item">InvalidQuantityException</span>
+            <span class="layer-item">InvalidReservationException</span>
+            <span class="layer-item">InvalidReservationStateException</span>
+          </div>
+          <div class="layer-col">
+            <div class="layer-col-title">Enums / Value Types</div>
+            <span class="layer-item">InventoryStatus</span>
+            <span class="layer-item">ReservationStatus</span>
+            <span class="layer-item">StockMovementType</span>
+          </div>
+          <div class="layer-col">
+            <div class="layer-col-title">Events (Integration)</div>
+            <span class="layer-item issue">ProductCreatedEvent ← misplaced</span>
+            <span class="layer-item stub">(no domain events published)</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <div class="section-divider"></div>
+
+  <!-- ── 4. Domain Model ──────────────────────────────── -->
+  <section class="section">
+    <h2>Domain Model</h2>
+
+    <h3 style="margin-bottom:1rem;">Aggregates &amp; Entities</h3>
+    <div class="aggregate-grid">
+
+      <!-- Inventory AR -->
+      <div class="agg-card">
+        <div class="agg-header">
+          <span class="agg-name">Inventory</span>
+          <span class="agg-role tag-ar">Aggregate Root</span>
+        </div>
+        <div class="agg-body">
+          <div class="agg-section">
+            <div class="agg-section-label">Identity</div>
+            <div class="field-list">
+              <span class="field"><span style="color:var(--accent);">InventoryId</span> id</span>
+              <span class="field"><span class="type">TenantId</span> tenantId</span>
+              <span class="field"><span class="type">StoreId</span> storeId</span>
+              <span class="field"><span class="type">ProductId</span> productId · <span class="type">SKU</span> sku</span>
+            </div>
+          </div>
+          <div class="agg-section">
+            <div class="agg-section-label">State</div>
+            <div class="field-list">
+              <span class="field"><span class="type">Long</span> quantity</span>
+              <span class="field"><span class="type">Long</span> reservedQuantity</span>
+              <span class="field"><span class="type">InventoryStatus</span> status</span>
+            </div>
+          </div>
+          <div class="agg-section">
+            <div class="agg-section-label">Domain Behavior</div>
+            <div class="method-list">
+              <span class="method domain-method">reserve(qty)</span>
+              <span class="method domain-method">release(qty)</span>
+              <span class="method domain-method">confirmReservation(qty)</span>
+              <span class="method domain-method">adjust(type, qty)</span>
+              <span class="method domain-method">receive(qty)</span>
+              <span class="method">availableQuantity()</span>
+              <span class="method">validateTenantAndStore()</span>
+            </div>
+          </div>
+          <div class="agg-section">
+            <div class="agg-section-label">Key Invariant</div>
+            <span style="font-size:0.8rem;color:var(--text-muted);">
+              <code>availableQty = quantity − reservedQuantity ≥ 0</code>
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <!-- StockReservation -->
+      <div class="agg-card">
+        <div class="agg-header">
+          <span class="agg-name">StockReservation</span>
+          <span class="agg-role tag-e">Entity</span>
+        </div>
+        <div class="agg-body">
+          <div class="agg-section">
+            <div class="agg-section-label">Identity &amp; FK</div>
+            <div class="field-list">
+              <span class="field"><span style="color:var(--accent);">StockReservationId</span> id</span>
+              <span class="field"><span class="type">InventoryId</span> inventoryId</span>
+              <span class="field"><span class="type">OrderId</span> orderId · <span class="type">OrderItemId</span> orderItemId</span>
+            </div>
+          </div>
+          <div class="agg-section">
+            <div class="agg-section-label">Lifecycle State Machine</div>
+            <div style="font-size:0.75rem;font-family:'JetBrains Mono',monospace;color:var(--text-muted);line-height:1.8;">
+              RESERVED → CONFIRMED<br>
+              RESERVED → RELEASED<br>
+              RESERVED → EXPIRED<br>
+              RESERVED → CANCELLED
+            </div>
+          </div>
+          <div class="agg-section">
+            <div class="agg-section-label">Behavior</div>
+            <div class="method-list">
+              <span class="method domain-method">reserve() [static factory]</span>
+              <span class="method domain-method">confirm()</span>
+              <span class="method domain-method">release()</span>
+              <span class="method domain-method">expire()</span>
+            </div>
+          </div>
+          <div class="agg-section">
+            <div class="agg-section-label">Notes</div>
+            <span style="font-size:0.78rem;color:var(--warn-text);">Aggregate boundary unclear — has own Repository but no AR. Consistency with <code>Inventory.reservedQuantity</code> is not enforced by the model.</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- StockMovement -->
+      <div class="agg-card">
+        <div class="agg-header">
+          <span class="agg-name">StockMovement</span>
+          <span class="agg-role tag-e">Entity / Ledger</span>
+        </div>
+        <div class="agg-body">
+          <div class="agg-section">
+            <div class="agg-section-label">Fields</div>
+            <div class="field-list">
+              <span class="field"><span style="color:var(--accent);">StockMovementId</span> id</span>
+              <span class="field"><span class="type">InventoryId</span> inventoryId</span>
+              <span class="field"><span class="type">StockMovementType</span> type</span>
+              <span class="field"><span class="type">Long</span> quantity</span>
+              <span class="field"><span class="type">String</span> referenceType · <span class="type">ReferenceId</span> referenceId</span>
+            </div>
+          </div>
+          <div class="agg-section">
+            <div class="agg-section-label">Movement Types</div>
+            <div style="display:flex;flex-wrap:wrap;gap:.3rem;">
+              <span class="method" style="color:var(--good-text);border-color:var(--good-border);">RECEIVE</span>
+              <span class="method" style="color:var(--good-text);border-color:var(--good-border);">RETURN</span>
+              <span class="method" style="color:var(--good-text);border-color:var(--good-border);">ADJUSTMENT_IN</span>
+              <span class="method" style="color:var(--good-text);border-color:var(--good-border);">TRANSFER_IN</span>
+              <span class="method" style="color:var(--error-text);border-color:var(--error-border);">SALE</span>
+              <span class="method" style="color:var(--error-text);border-color:var(--error-border);">ADJUSTMENT_OUT</span>
+              <span class="method" style="color:var(--error-text);border-color:var(--error-border);">DAMAGE</span>
+              <span class="method" style="color:var(--error-text);border-color:var(--error-border);">TRANSFER_OUT</span>
+            </div>
+          </div>
+          <div class="agg-section">
+            <div class="agg-section-label">Notes</div>
+            <span style="font-size:0.78rem;color:var(--text-muted);">Immutable audit ledger — no mutable domain behavior. <code>referenceId</code> is never populated in the factory method.</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <h3 style="margin: 1.75rem 0 0.75rem;">Value Objects</h3>
+    <div style="display:flex;gap:1rem;flex-wrap:wrap;margin-bottom:.5rem;">
+      <div>
+        <div style="font-size:.7rem;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--accent);margin-bottom:.4rem;">From core module</div>
+        <div class="vo-grid">
+          <span class="vo-chip core">TenantId</span>
+          <span class="vo-chip core">StoreId</span>
+          <span class="vo-chip core">ProductId</span>
+          <span class="vo-chip core">SKU</span>
+          <span class="vo-chip core">InventoryId</span>
+          <span class="vo-chip core">OrderId</span>
+          <span class="vo-chip core">OrderItemId</span>
+          <span class="vo-chip core">ReferenceId</span>
+        </div>
+      </div>
+      <div>
+        <div style="font-size:.7rem;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#5B21B6;margin-bottom:.4rem;">Local to this service</div>
+        <div class="vo-grid">
+          <span class="vo-chip local">StockReservationId</span>
+          <span class="vo-chip local">StockMovementId</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="section-divider"></div>
+
+  <!-- ── 5. Use Case Inventory ─────────────────────────── -->
+  <section class="section">
+    <h2>Use Case Inventory</h2>
+    <div class="uc-table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Use Case</th>
+            <th>Service Implementation</th>
+            <th>Trigger</th>
+            <th>Aggregates Touched</th>
+            <th>Notes</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="uc-name">CreateInventoryUseCase</span></td>
+            <td><code>CreateInventoryService</code></td>
+            <td><span class="trigger-badge trigger-kafka">Kafka · ProductCreated</span></td>
+            <td>Inventory</td>
+            <td>Creates one Inventory record per SKU</td>
+          </tr>
+          <tr>
+            <td><span class="uc-name">AdjustStockUseCase</span></td>
+            <td><code>AdjustStockService</code></td>
+            <td><span class="trigger-badge trigger-http">HTTP POST</span></td>
+            <td>Inventory, StockMovement</td>
+            <td>Calls DynamoDB directly in service <span class="stub-tag">infra leak</span></td>
+          </tr>
+          <tr>
+            <td><span class="uc-name">LoadInventoryUseCase</span></td>
+            <td><code>LoadInventoryService</code></td>
+            <td><span class="trigger-badge trigger-http">HTTP GET</span></td>
+            <td>Inventory (read)</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td><span class="uc-name">ReserveStockUseCase</span></td>
+            <td><code>ReserveStockService</code></td>
+            <td><span class="trigger-badge trigger-kafka">Kafka · OrderCreated (stub)</span></td>
+            <td>Inventory, StockReservation</td>
+            <td>Consumer exists but <code>@KafkaListener</code> is commented out</td>
+          </tr>
+          <tr>
+            <td><span class="uc-name">ConfirmStockReservationUseCase</span></td>
+            <td><code>ConfirmStockReservationService</code></td>
+            <td><span class="trigger-badge trigger-kafka">Kafka (expected)</span></td>
+            <td>StockReservation only</td>
+            <td>Never calls <code>inventory.confirmReservation()</code> <span class="stub-tag">critical bug</span></td>
+          </tr>
+          <tr>
+            <td><span class="uc-name">ExpireStockReservationUseCase</span></td>
+            <td><code>ExpireStockReservationService</code></td>
+            <td><span class="trigger-badge trigger-sqs">AWS SQS · EventBridge schedule</span></td>
+            <td>Inventory, StockReservation</td>
+            <td>Good optimistic-locking retry pattern via <code>REQUIRES_NEW</code></td>
+          </tr>
+          <tr>
+            <td><span class="uc-name">GetStockMovementsUseCase</span></td>
+            <td><code>GetStockMovementService</code></td>
+            <td><span class="trigger-badge trigger-http">HTTP GET</span></td>
+            <td>StockMovement (read)</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td><span class="uc-name">ReleaseStockReservationUseCase</span></td>
+            <td style="color:var(--warn-text);font-style:italic;">No implementation</td>
+            <td>—</td>
+            <td>—</td>
+            <td>Interface is empty; no service class <span class="stub-tag">missing</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <div class="section-divider"></div>
+
+  <!-- ── 6. DDD Findings ───────────────────────────────── -->
+  <section class="section">
+    <h2>DDD Conformance Findings</h2>
+    <p>Click any finding to expand the analysis and recommendation.</p>
+
+    <!-- Good -->
+    <div class="findings-group-label">
+      <h3>Conformant Practices</h3>
+      <span class="findings-count count-good">10</span>
+    </div>
+
+    <div class="finding good">
+      <div class="finding-header" onclick="toggle(this)">
+        <span class="severity-badge">Good</span>
+        <span class="finding-title">Rich Aggregate Root with enforced invariants</span>
+        <span class="finding-toggle">▼</span>
+      </div>
+      <div class="finding-body hidden">
+        <div class="finding-section">
+          <div class="finding-section-label">Location</div>
+          <span class="location-chip">domain/model/Inventory.java</span>
+        </div>
+        <div class="finding-section">
+          <div class="finding-section-label">Detail</div>
+          <p><code>Inventory</code> owns all stock mutation logic. Methods <code>reserve()</code>, <code>release()</code>, <code>confirmReservation()</code>, and <code>adjust()</code> each validate preconditions and throw domain-specific exceptions before mutating state. The <code>availableQuantity()</code> derived field prevents direct field reads. This is textbook DDD — behavior and state live together.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="finding good">
+      <div class="finding-header" onclick="toggle(this)">
+        <span class="severity-badge">Good</span>
+        <span class="finding-title">Typed Value Objects shield primitives across all aggregate boundaries</span>
+        <span class="finding-toggle">▼</span>
+      </div>
+      <div class="finding-body hidden">
+        <div class="finding-section">
+          <div class="finding-section-label">Location</div>
+          <span class="location-chip">core/domain/id/*.java</span>
+          <span class="location-chip">common/id/*.java</span>
+        </div>
+        <div class="finding-section">
+          <div class="finding-section-label">Detail</div>
+          <p><code>TenantId</code>, <code>StoreId</code>, <code>SKU</code>, <code>OrderId</code>, etc., prevent raw UUIDs and strings from being passed incorrectly between use cases. The compiler enforces context — you cannot pass an <code>OrderId</code> where a <code>StoreId</code> is expected.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="finding good">
+      <div class="finding-header" onclick="toggle(this)">
+        <span class="severity-badge">Good</span>
+        <span class="finding-title">Domain exceptions carry business meaning</span>
+        <span class="finding-toggle">▼</span>
+      </div>
+      <div class="finding-body hidden">
+        <div class="finding-section">
+          <div class="finding-section-label">Location</div>
+          <span class="location-chip">domain/exception/*.java</span>
+        </div>
+        <div class="finding-section">
+          <div class="finding-section-label">Detail</div>
+          <p><code>InsufficientStockException</code>, <code>InvalidReservationStateException</code>, <code>InvalidQuantityException</code> are thrown by the domain model itself, not the application layer. The domain speaks in ubiquitous language, and the infrastructure layer translates these to HTTP 4xx responses in <code>InventoryExceptionHandler</code>.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="finding good">
+      <div class="finding-header" onclick="toggle(this)">
+        <span class="severity-badge">Good</span>
+        <span class="finding-title">Hexagonal ports cleanly separate application from infrastructure</span>
+        <span class="finding-toggle">▼</span>
+      </div>
+      <div class="finding-body hidden">
+        <div class="finding-section">
+          <div class="finding-section-label">Location</div>
+          <span class="location-chip">application/repository/*.java</span>
+          <span class="location-chip">application/usecase/**/*.java</span>
+        </div>
+        <div class="finding-section">
+          <div class="finding-section-label">Detail</div>
+          <p>Repository interfaces are declared in <code>application</code> and implemented in <code>infrastructure</code>. Use-case interfaces form the inbound ports. Custom stereotypes <code>@UseCase</code>, <code>@WebAdapter</code>, and <code>@PersistenceAdapter</code> make the intent explicit in code without relying on naming conventions alone.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="finding good">
+      <div class="finding-header" onclick="toggle(this)">
+        <span class="severity-badge">Good</span>
+        <span class="finding-title">StockReservation has a well-modeled lifecycle state machine</span>
+        <span class="finding-toggle">▼</span>
+      </div>
+      <div class="finding-body hidden">
+        <div class="finding-section">
+          <div class="finding-section-label">Location</div>
+          <span class="location-chip">domain/model/StockReservation.java:62–87</span>
+        </div>
+        <div class="finding-section">
+          <div class="finding-section-label">Detail</div>
+          <p>Each state transition (<code>confirm()</code>, <code>release()</code>, <code>expire()</code>) guards on <code>status == RESERVED</code> and throws <code>InvalidReservationStateException</code> for illegal transitions. The static factory <code>reserve()</code> sets a 30-minute TTL on creation.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="finding good">
+      <div class="finding-header" onclick="toggle(this)">
+        <span class="severity-badge">Good</span>
+        <span class="finding-title">Reservation expiry uses REQUIRES_NEW for per-inventory isolation</span>
+        <span class="finding-toggle">▼</span>
+      </div>
+      <div class="finding-body hidden">
+        <div class="finding-section">
+          <div class="finding-section-label">Location</div>
+          <span class="location-chip">application/service/ExpireByInventoryTransaction.java:27</span>
+        </div>
+        <div class="finding-section">
+          <div class="finding-section-label">Detail</div>
+          <p><code>ExpireStockReservationService</code> groups expired reservations by <code>InventoryId</code> and calls <code>ExpireByInventoryTransaction.execute()</code> in a new transaction per group. An <code>ObjectOptimisticLockingFailureException</code> on one inventory does not roll back others. This is a thoughtful concurrency design.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="finding good">
+      <div class="finding-header" onclick="toggle(this)">
+        <span class="severity-badge">Good</span>
+        <span class="finding-title">Inbound adapters map external events to Commands before calling use cases</span>
+        <span class="finding-toggle">▼</span>
+      </div>
+      <div class="finding-body hidden">
+        <div class="finding-section">
+          <div class="finding-section-label">Location</div>
+          <span class="location-chip">infrastructure/message/ProductCreatedConsumer.java</span>
+        </div>
+        <div class="finding-section">
+          <div class="finding-section-label">Detail</div>
+          <p><code>ProductCreatedConsumer</code> deserializes the Kafka payload, maps fields to typed Value Objects, constructs a <code>CreateInventoryCmd</code>, and then calls the use case. The use case layer never touches Kafka types. This is a correct Anti-Corruption Layer (ACL) translation.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="finding good">
+      <div class="finding-header" onclick="toggle(this)">
+        <span class="severity-badge">Good</span>
+        <span class="finding-title">StockMovementType encodes business semantics with isStockIn/isStockOut</span>
+        <span class="finding-toggle">▼</span>
+      </div>
+      <div class="finding-body hidden">
+        <div class="finding-section">
+          <div class="finding-section-label">Location</div>
+          <span class="location-chip">domain/enums/StockMovementType.java</span>
+        </div>
+        <div class="finding-section">
+          <div class="finding-section-label">Detail</div>
+          <p>The enum carries domain logic (<code>isStockIn()</code>, <code>isStockOut()</code>), eliminating scattered <code>if-else</code> chains in the application layer. <code>Inventory.adjust()</code> delegates to this without conditional branching.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="finding good">
+      <div class="finding-header" onclick="toggle(this)">
+        <span class="severity-badge">Good</span>
+        <span class="finding-title">Multi-tenancy enforced by domain validation, not only at the API gateway</span>
+        <span class="finding-toggle">▼</span>
+      </div>
+      <div class="finding-body hidden">
+        <div class="finding-section">
+          <div class="finding-section-label">Location</div>
+          <span class="location-chip">domain/model/Inventory.java:110–114</span>
+        </div>
+        <div class="finding-section">
+          <div class="finding-section-label">Detail</div>
+          <p><code>validateTenantAndStore()</code> is called in <code>AdjustStockService</code> after loading the aggregate, ensuring cross-tenant access is blocked at the domain level regardless of how the service is called.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="finding good">
+      <div class="finding-header" onclick="toggle(this)">
+        <span class="severity-badge">Good</span>
+        <span class="finding-title">Batch operations on Inventory are tested for completeness before mutation</span>
+        <span class="finding-toggle">▼</span>
+      </div>
+      <div class="finding-body hidden">
+        <div class="finding-section">
+          <div class="finding-section-label">Location</div>
+          <span class="location-chip">infrastructure/persistence/InventoryPersistenceAdapter.java:63–76</span>
+        </div>
+        <div class="finding-section">
+          <div class="finding-section-label">Detail</div>
+          <p>In <code>updateBatch()</code>, the adapter fetches all IDs, computes the set difference between requested and found IDs, and throws before any update if any are missing. This prevents partial updates from silently succeeding.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Critical -->
+    <div class="findings-group-label">
+      <h3>Critical Issues</h3>
+      <span class="findings-count count-critical">2</span>
+    </div>
+
+    <div class="finding critical">
+      <div class="finding-header" onclick="toggle(this)">
+        <span class="severity-badge">Critical</span>
+        <span class="finding-title">Outbox pattern is entirely absent — domain events are never published</span>
+        <span class="finding-toggle">▼</span>
+      </div>
+      <div class="finding-body hidden">
+        <div class="finding-section">
+          <div class="finding-section-label">Location</div>
+          <span class="location-chip">db/migration/V1__init_inventory_tables.sql</span>
+          <span class="location-chip">domain/event/ (no publisher)</span>
+        </div>
+        <div class="finding-section">
+          <div class="finding-section-label">Impact</div>
+          <p>The design claims to implement the Outbox pattern, but there is no <code>outbox_events</code> table in the schema and no event publisher class anywhere in the codebase. State changes (<code>StockReserved</code>, <code>ReservationExpired</code>, <code>StockAdjusted</code>) are committed to the database but never propagated to downstream contexts (Order, Notification, Analytics). This means the Order BC cannot learn that stock has been reserved — the saga cannot progress. Without Outbox, stock mutations and event publication are not atomic, violating the core guarantee the pattern was chosen to provide.</p>
+        </div>
+        <div class="finding-section">
+          <div class="finding-section-label">Recommendation</div>
+          <p>Add an <code>outbox_events</code> table. After each aggregate mutation, write a serialized domain event to that table <em>in the same transaction</em>. A separate relay process (or Debezium CDC) reads committed rows and publishes to Kafka, then marks them processed.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="finding critical">
+      <div class="finding-header" onclick="toggle(this)">
+        <span class="severity-badge">Critical</span>
+        <span class="finding-title">ConfirmStockReservationService never calls inventory.confirmReservation() — stock quantities never reflect fulfilled orders</span>
+        <span class="finding-toggle">▼</span>
+      </div>
+      <div class="finding-body hidden">
+        <div class="finding-section">
+          <div class="finding-section-label">Location</div>
+          <span class="location-chip">application/service/ConfirmStockReservationService.java:25–42</span>
+        </div>
+        <div class="finding-section">
+          <div class="finding-section-label">Impact</div>
+          <p>When an order is paid, <code>ConfirmStockReservationService.confirm()</code> marks <code>StockReservation</code> records as <code>CONFIRMED</code> but never loads <code>Inventory</code> and never calls <code>inventory.confirmReservation(quantity)</code>. The domain method that decrements <em>both</em> <code>reservedQuantity</code> and <code>quantity</code> is never invoked. The result: <code>Inventory.reservedQuantity</code> stays permanently elevated after each confirmed order. Over time, <code>availableQuantity()</code> returns values that are less than the actual available stock, which will erroneously block future reservations.</p>
+        </div>
+        <div class="finding-section">
+          <div class="finding-section-label">Recommendation</div>
+          <p>After updating reservations, load each related <code>Inventory</code>, call <code>inventory.confirmReservation(reservation.getQuantity())</code>, and persist the inventory. Group by <code>inventoryId</code> to batch the calls efficiently.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- High -->
+    <div class="findings-group-label">
+      <h3>High Issues</h3>
+      <span class="findings-count count-high">3</span>
+    </div>
+
+    <div class="finding high">
+      <div class="finding-header" onclick="toggle(this)">
+        <span class="severity-badge">High</span>
+        <span class="finding-title">Native SQL UPDATE in SpringDataInventoryRepository bypasses the Inventory aggregate entirely</span>
+        <span class="finding-toggle">▼</span>
+      </div>
+      <div class="finding-body hidden">
+        <div class="finding-section">
+          <div class="finding-section-label">Location</div>
+          <span class="location-chip">infrastructure/persistence/jpa/SpringDataInventoryRepository.java:20–29</span>
+          <span class="location-chip">application/repository/InventoryRepository.java:31</span>
+        </div>
+        <div class="finding-section">
+          <div class="finding-section-label">Impact</div>
+          <p><code>SpringDataInventoryRepository.reserve()</code> executes a raw <code>UPDATE inventories SET reserved_quantity = reserved_quantity + :quantity WHERE ...</code> directly in the database. No <code>Inventory</code> object is loaded; <code>Inventory.reserve()</code> is never called; the <code>availableQuantity()</code> guard is never checked; and the domain exception <code>InsufficientStockException</code> is never thrown. This path exposes the service to silent over-reservation. This raw method is also exposed as a port method in <code>InventoryRepository</code>, leaking SQL semantics into the application boundary.</p>
+        </div>
+        <div class="finding-section">
+          <div class="finding-section-label">Recommendation</div>
+          <p>Remove <code>InventoryRepository.reserve()</code>. <code>ReserveStockService</code> already correctly loads the aggregate and calls <code>inventory.reserve()</code> — the native query path appears to be dead code or a remnant of an earlier approach. Verify no caller depends on it and delete both the interface method and the native query.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="finding high">
+      <div class="finding-header" onclick="toggle(this)">
+        <span class="severity-badge">High</span>
+        <span class="finding-title">AdjustStockService directly depends on DynamoDbTenantInfoRepository — infrastructure leaks into the application layer</span>
+        <span class="finding-toggle">▼</span>
+      </div>
+      <div class="finding-body hidden">
+        <div class="finding-section">
+          <div class="finding-section-label">Location</div>
+          <span class="location-chip">application/service/AdjustStockService.java:13</span>
+          <span class="location-chip">application/service/AdjustStockService.java:32–34</span>
+        </div>
+        <div class="finding-section">
+          <div class="finding-section-label">Impact</div>
+          <p><code>AdjustStockService</code> imports and injects <code>DynamoDbTenantInfoRepository</code> — a concrete AWS infrastructure class. This breaks the Dependency Inversion Principle: the application layer now depends on a specific cloud technology. Unit testing the service requires mocking DynamoDB; replacing DynamoDB requires editing the application service.</p>
+        </div>
+        <div class="finding-section">
+          <div class="finding-section-label">Recommendation</div>
+          <p>Introduce a <code>TenantRepository</code> port interface in <code>application/repository</code>. Implement it in infrastructure with <code>DynamoDbTenantInfoRepository</code> as a delegate. The application service depends only on the interface.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="finding high">
+      <div class="finding-header" onclick="toggle(this)">
+        <span class="severity-badge">High</span>
+        <span class="finding-title">ProductCreatedEvent is placed in the domain layer — it is an external integration event, not a domain event</span>
+        <span class="finding-toggle">▼</span>
+      </div>
+      <div class="finding-body hidden">
+        <div class="finding-section">
+          <div class="finding-section-label">Location</div>
+          <span class="location-chip">domain/event/ProductCreatedEvent.java</span>
+        </div>
+        <div class="finding-section">
+          <div class="finding-section-label">Impact</div>
+          <p><code>ProductCreatedEvent</code> is a contract owned by the Product bounded context, not by the Inventory domain. Placing it in <code>domain/event</code> blurs the boundary between what this context <em>owns</em> and what it <em>consumes</em>. Domain events should represent things that happened <em>within</em> this bounded context. This class should live at the infrastructure boundary where it is consumed.</p>
+        </div>
+        <div class="finding-section">
+          <div class="finding-section-label">Recommendation</div>
+          <p>Move <code>ProductCreatedEvent</code> to <code>infrastructure/message/dto</code> (or a dedicated <code>acl</code> package). The ACL translation in <code>ProductCreatedConsumer</code> maps this external DTO to an internal <code>CreateInventoryCmd</code> — the DTO should live next to the consumer that uses it.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Medium -->
+    <div class="findings-group-label">
+      <h3>Medium Issues</h3>
+      <span class="findings-count count-medium">3</span>
+    </div>
+
+    <div class="finding medium">
+      <div class="finding-header" onclick="toggle(this)">
+        <span class="severity-badge">Medium</span>
+        <span class="finding-title">ReleaseStockReservationUseCase is an empty interface with no service — a business capability is unimplemented</span>
+        <span class="finding-toggle">▼</span>
+      </div>
+      <div class="finding-body hidden">
+        <div class="finding-section">
+          <div class="finding-section-label">Location</div>
+          <span class="location-chip">application/usecase/reservation/ReleaseStockReservationUseCase.java</span>
+        </div>
+        <div class="finding-section">
+          <div class="finding-section-label">Impact</div>
+          <p>The <code>StockReservation</code> domain model has a <code>release()</code> method and <code>Inventory</code> has a <code>release(quantity)</code> method — both well-implemented. But the use case that orchestrates them (e.g., when an order is cancelled before payment) has never been written. Stock locked by a cancelled order can only be freed via the expiry timer, not on demand.</p>
+        </div>
+        <div class="finding-section">
+          <div class="finding-section-label">Recommendation</div>
+          <p>Implement <code>ReleaseStockReservationService</code> mirroring the pattern in <code>ExpireByInventoryTransaction</code>: load reservations by <code>orderId</code>, call <code>stockReservation.release()</code>, sum quantities, load <code>Inventory</code>, call <code>inventory.release(totalQty)</code>, persist both.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="finding medium">
+      <div class="finding-header" onclick="toggle(this)">
+        <span class="severity-badge">Medium</span>
+        <span class="finding-title">Aggregate boundary between Inventory and StockReservation is ambiguous — consistency is not guaranteed by the model</span>
+        <span class="finding-toggle">▼</span>
+      </div>
+      <div class="finding-body hidden">
+        <div class="finding-section">
+          <div class="finding-section-label">Location</div>
+          <span class="location-chip">domain/model/StockReservation.java</span>
+          <span class="location-chip">application/repository/StockReservationRepository.java</span>
+        </div>
+        <div class="finding-section">
+          <div class="finding-section-label">Impact</div>
+          <p><code>StockReservation</code> has its own repository (implying a separate aggregate root) but it is not explicitly declared as one. The invariant that <code>Inventory.reservedQuantity == SUM(active reservation quantities for that inventory)</code> must always hold, but nothing in the domain model enforces it — it relies entirely on the application layer executing both mutations atomically. If any service calls only one side, the invariant silently breaks (as already demonstrated by <code>ConfirmStockReservationService</code>).</p>
+        </div>
+        <div class="finding-section">
+          <div class="finding-section-label">Recommendation</div>
+          <p>Make the design decision explicit. Option A: make <code>StockReservation</code> part of the <code>Inventory</code> aggregate (embed reservations as a collection on <code>Inventory</code>) — the aggregate root enforces the invariant directly. Option B: keep them as separate aggregates and document that the application layer <em>must</em> always update both, with a transaction-scoped consistency test.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="finding medium">
+      <div class="finding-header" onclick="toggle(this)">
+        <span class="severity-badge">Medium</span>
+        <span class="finding-title">StockMovement.referenceId is never populated — the audit ledger loses traceability</span>
+        <span class="finding-toggle">▼</span>
+      </div>
+      <div class="finding-body hidden">
+        <div class="finding-section">
+          <div class="finding-section-label">Location</div>
+          <span class="location-chip">domain/model/StockMovement.java:37–48</span>
+          <span class="location-chip">infrastructure/persistence/entity/StockMovementEntity.java:56–59</span>
+        </div>
+        <div class="finding-section">
+          <div class="finding-section-label">Impact</div>
+          <p><code>StockMovement.newInstance()</code> accepts <code>reason</code> but never populates <code>referenceType</code> or <code>referenceId</code>. The schema has <code>reference_type</code> and <code>reference_id</code> columns with an index on both. Without these, it is impossible to answer "which order triggered this stock movement?" or "which adjustment request removed these 50 units?"</p>
+        </div>
+        <div class="finding-section">
+          <div class="finding-section-label">Recommendation</div>
+          <p>Add <code>referenceType</code> and <code>referenceId</code> parameters to <code>StockMovement.newInstance()</code>. In <code>AdjustStockService</code>, pass the adjustment command's ID or the SKU as the reference; in reservation-driven movements, pass the <code>orderId</code>.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Low -->
+    <div class="findings-group-label">
+      <h3>Low / Cosmetic</h3>
+      <span class="findings-count count-low">2</span>
+    </div>
+
+    <div class="finding low">
+      <div class="finding-header" onclick="toggle(this)">
+        <span class="severity-badge">Low</span>
+        <span class="finding-title">OrderCreatedEventConsumer is a no-op stub — stock reservation flow cannot be triggered via events</span>
+        <span class="finding-toggle">▼</span>
+      </div>
+      <div class="finding-body hidden">
+        <div class="finding-section">
+          <div class="finding-section-label">Location</div>
+          <span class="location-chip">infrastructure/message/OrderCreatedEventConsumer.java:14</span>
+        </div>
+        <div class="finding-section">
+          <div class="finding-section-label">Detail</div>
+          <p>The <code>@KafkaListener</code> annotation is commented out and the method body only logs. <code>ReserveStockService</code> and <code>ReserveStockUseCase</code> are fully implemented — the consumer just needs to deserialize <code>OrderCreatedEvent</code>, build a <code>ReserveStockCmd</code>, and call the use case.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="finding low">
+      <div class="finding-header" onclick="toggle(this)">
+        <span class="severity-badge">Low</span>
+        <span class="finding-title">ExpireByInventoryTransaction uses @Service instead of a domain-meaningful stereotype</span>
+        <span class="finding-toggle">▼</span>
+      </div>
+      <div class="finding-body hidden">
+        <div class="finding-section">
+          <div class="finding-section-label">Location</div>
+          <span class="location-chip">application/service/ExpireByInventoryTransaction.java:19</span>
+        </div>
+        <div class="finding-section">
+          <div class="finding-section-label">Detail</div>
+          <p>All other application services use the project's custom <code>@UseCase</code> annotation. <code>ExpireByInventoryTransaction</code> uses bare <code>@Service</code>, which is inconsistent and makes it harder to discover all application services via annotation scanning.</p>
+        </div>
+      </div>
+    </div>
+
+  </section>
+
+  <div class="section-divider"></div>
+
+  <!-- ── 7. Recommendations ────────────────────────────── -->
+  <section class="section">
+    <h2>Prioritized Recommendations</h2>
+
+    <div class="rec-list">
+
+      <div class="rec-item">
+        <div class="rec-num">1</div>
+        <div>
+          <div class="rec-title">Fix ConfirmStockReservationService to call inventory.confirmReservation() <span class="rec-priority priority-p0">P0 — Correctness</span></div>
+          <div class="rec-desc">Load the <code>Inventory</code> aggregate for each confirmed reservation, call <code>inventory.confirmReservation(qty)</code>, and persist it in the same transaction. Without this, <code>Inventory.reservedQuantity</code> grows without bound and future reservations will be incorrectly rejected.</div>
+        </div>
+      </div>
+
+      <div class="rec-item">
+        <div class="rec-num">2</div>
+        <div>
+          <div class="rec-title">Implement the Outbox pattern <span class="rec-priority priority-p0">P0 — Architecture</span></div>
+          <div class="rec-desc">Add an <code>outbox_events</code> table. In each use-case transaction, write a serialized domain event row alongside the aggregate mutation. Deploy a relay (polling or CDC via Debezium) that publishes committed events to Kafka. This is the core guarantee the pattern was chosen to provide, and it is entirely missing.</div>
+        </div>
+      </div>
+
+      <div class="rec-item">
+        <div class="rec-num">3</div>
+        <div>
+          <div class="rec-title">Remove InventoryRepository.reserve() and the native SQL shortcut <span class="rec-priority priority-p1">P1 — DDD Integrity</span></div>
+          <div class="rec-desc">Delete the native <code>UPDATE</code> path that bypasses the aggregate. <code>ReserveStockService</code> already follows the correct flow. The raw SQL path is dead code that could be accidentally reactivated and will silently violate domain invariants.</div>
+        </div>
+      </div>
+
+      <div class="rec-item">
+        <div class="rec-num">4</div>
+        <div>
+          <div class="rec-title">Abstract DynamoDB behind a TenantRepository port interface <span class="rec-priority priority-p1">P1 — Hexagonal Conformance</span></div>
+          <div class="rec-desc">Introduce <code>application/repository/TenantRepository</code>. Move the <code>DynamoDbTenantInfoRepository</code> dependency to <code>infrastructure</code>. Application services should not know they are talking to DynamoDB.</div>
+        </div>
+      </div>
+
+      <div class="rec-item">
+        <div class="rec-num">5</div>
+        <div>
+          <div class="rec-title">Implement ReleaseStockReservationService and wire up OrderCreatedEventConsumer <span class="rec-priority priority-p1">P1 — Feature Completeness</span></div>
+          <div class="rec-desc">The domain model supports both operations fully. Only the application orchestration and the Kafka wiring are missing. Without order-cancellation release, stock is held until the 30-minute expiry regardless of what the customer does.</div>
+        </div>
+      </div>
+
+      <div class="rec-item">
+        <div class="rec-num">6</div>
+        <div>
+          <div class="rec-title">Move ProductCreatedEvent to infrastructure/message/dto and populate StockMovement.referenceId <span class="rec-priority priority-p2">P2 — Cleanliness</span></div>
+          <div class="rec-desc">Relocating the external event DTO clarifies aggregate ownership. Populating <code>referenceType</code> and <code>referenceId</code> on <code>StockMovement</code> makes the audit ledger queryable — the schema already has the column and index.</div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+</div>
+
+<script>
+  function toggle(header) {
+    const body = header.nextElementSibling;
+    const arrow = header.querySelector('.finding-toggle');
+    body.classList.toggle('hidden');
+    arrow.textContent = body.classList.contains('hidden') ? '▼' : '▲';
+  }
+</script>
