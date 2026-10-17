@@ -3,6 +3,7 @@ package com.dotran.oms.inventory.application.service;
 import com.dotran.oms.core.util.CollectionUtils;
 import com.dotran.oms.inventory.application.repository.InventoryRepository;
 import com.dotran.oms.inventory.application.repository.StockReservationRepository;
+import com.dotran.oms.inventory.domain.exception.InvalidReservationException;
 import com.dotran.oms.inventory.domain.model.Inventory;
 import com.dotran.oms.inventory.domain.model.StockReservation;
 import com.dotran.oms.core.domain.id.InventoryId;
@@ -43,15 +44,15 @@ public class ExpireByInventoryTransaction {
 
         Inventory inventory = inventoryRepository.getById(inventoryId)
                 .orElseThrow(() -> new NotFoundException("Inventory not found: " + inventoryId));
-
         inventory.release(releaseQuantity);
 
-        inventoryRepository.update(inventory);
-
+        int updated = inventoryRepository.release(inventoryId, releaseQuantity);
+        if (updated == 0) {
+            log.error("Failed to release inventory for inventoryId: {}", inventoryId);
+            throw new InvalidReservationException();
+        }
 
         log.info("Expired {} reservations and released {} quantity for inventory {}",
-                updatedReservations.size(),
-                releaseQuantity,
-                inventoryId);
+                updatedReservations.size(), releaseQuantity, inventoryId);
     }
 }

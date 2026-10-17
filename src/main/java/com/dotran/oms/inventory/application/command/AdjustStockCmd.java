@@ -2,6 +2,7 @@ package com.dotran.oms.inventory.application.command;
 
 import com.dotran.oms.inventory.domain.enums.StockMovementType;
 import com.dotran.oms.core.domain.id.InventoryId;
+import com.dotran.oms.core.domain.id.ReferenceId;
 import com.dotran.oms.core.domain.id.StoreId;
 import com.dotran.oms.core.domain.id.TenantId;
 import jakarta.validation.constraints.Positive;
@@ -18,5 +19,7 @@ public class AdjustStockCmd {
     @Positive
     private Long quantity;
     private StockMovementType movementType;
+    private String referenceType;
+    private ReferenceId referenceId;
     private String reason;
 }

@@ -34,13 +34,16 @@ public class StockMovement extends BaseDomain<StockMovementId> {
 
     private Instant createdAt;
 
-    public static StockMovement newInstance(Inventory inventory, StockMovementType type, Long quantity, String reason) {
+    public static StockMovement newInstance(Inventory inventory, StockMovementType type, Long quantity,
+                                            String referenceType, ReferenceId referenceId, String reason) {
         StockMovement stockMovement = StockMovement.builder()
                 .tenantId(inventory.getTenantId())
                 .storeId(inventory.getStoreId())
                 .inventoryId(inventory.getId())
                 .type(type)
                 .quantity(quantity)
+                .referenceType(referenceType)
+                .referenceId(referenceId)
                 .reason(reason)
                 .build();
         stockMovement.newStockMovement();

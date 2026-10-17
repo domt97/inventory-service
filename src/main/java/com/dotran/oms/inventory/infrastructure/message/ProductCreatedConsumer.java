@@ -2,7 +2,7 @@ package com.dotran.oms.inventory.infrastructure.message;
 
 import com.dotran.oms.inventory.application.command.CreateInventoryCmd;
 import com.dotran.oms.inventory.application.usecase.inventory.CreateInventoryUseCase;
-import com.dotran.oms.inventory.domain.event.ProductCreatedEvent;
+import com.dotran.oms.inventory.infrastructure.message.dto.ProductCreatedEvent;
 import com.dotran.oms.core.domain.id.ProductId;
 import com.dotran.oms.core.domain.id.StoreId;
 import com.dotran.oms.core.domain.id.TenantId;

@@ -6,6 +6,7 @@ import com.dotran.oms.inventory.application.command.ReserveStockCmd;
 import com.dotran.oms.inventory.application.repository.InventoryRepository;
 import com.dotran.oms.inventory.application.repository.StockReservationRepository;
 import com.dotran.oms.inventory.application.usecase.reservation.ReserveStockUseCase;
+import com.dotran.oms.inventory.domain.exception.InsufficientStockException;
 import com.dotran.oms.inventory.domain.model.Inventory;
 import com.dotran.oms.inventory.domain.model.StockReservation;
 import com.dotran.oms.core.annotation.UseCase;
@@ -40,7 +41,6 @@ public class ReserveStockService implements ReserveStockUseCase {
 
         if (CollectionUtils.isEmpty(skus)) {
             log.warn("ReserveStockCmd contains no SKUs to reserve for order: {}", reserveStockCmd.getOrderId().getValue());
-
             return;
         }
 
@@ -48,7 +48,6 @@ public class ReserveStockService implements ReserveStockUseCase {
                 .getByStoreIdAndSKUs(reserveStockCmd.getStoreId(), skus);
         if (CollectionUtils.isEmpty(inventories)) {
             log.warn("No inventories found for SKUs: {} in store: {}", skus, reserveStockCmd.getStoreId());
-
             throw new ValidationException("Missing inventories for SKUs: " +
                     skus.stream().map(SKU::getValue).collect(Collectors.joining(", ")));
         }
@@ -56,12 +55,26 @@ public class ReserveStockService implements ReserveStockUseCase {
         Map<SKU, Inventory> inventoryMap = inventories.stream()
                 .collect(Collectors.toMap(Inventory::getSku, Function.identity()));
 
+        List<SKU> missingSkus = skus.stream()
+                .filter(sku -> !inventoryMap.containsKey(sku))
+                .toList();
+        if (!missingSkus.isEmpty()) {
+            throw new ValidationException("Missing inventories for SKUs: " +
+                    missingSkus.stream().map(SKU::getValue).collect(Collectors.joining(", ")));
+        }
+
         List<StockReservation> reservations = new ArrayList<>();
 
         for (ReserveStockCmd.ReserveStockSKU reserveStockSKU : reserveStockCmd.getSkus()) {
             Inventory inventory = inventoryMap.get(reserveStockSKU.getSku());
 
             inventory.reserve(reserveStockSKU.getQuantity());
+
+            int updated = inventoryRepository.reserve(inventory.getId(), reserveStockSKU.getQuantity());
+            if (updated == 0) {
+                log.warn("Insufficient stock for SKU: {} in store: {}", reserveStockSKU.getSku(), reserveStockCmd.getStoreId());
+                throw new InsufficientStockException();
+            }
 
             StockReservation stockReservation = StockReservation.reserve(
                     reserveStockCmd.getTenantId(),
@@ -75,12 +88,8 @@ public class ReserveStockService implements ReserveStockUseCase {
             reservations.add(stockReservation);
         }
 
-        List<Inventory> updatedInventories = inventoryRepository.updateBatch(inventories);
-        log.info("Updated inventories after reservation: {}", updatedInventories.size());
-
         List<StockReservation> createdReservations = stockReservationRepository.createBatch(reservations);
-        log.info("Created stock reservations: {}", createdReservations.size());
-
-        log.info("Stock reserved successfully for order: {}", reserveStockCmd.getOrderId().getValue());
+        log.info("Stock reserved successfully for order: {}, total reservations: {}",
+                reserveStockCmd.getOrderId().getValue(), createdReservations.size());
     }
 }

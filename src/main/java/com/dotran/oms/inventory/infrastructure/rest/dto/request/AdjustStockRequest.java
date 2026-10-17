@@ -27,5 +27,7 @@ public class AdjustStockRequest {
 
     @NotNull
     private StockMovementType movementType;
+    private String referenceType;
+    private UUID referenceId;
     private String reason;
 }

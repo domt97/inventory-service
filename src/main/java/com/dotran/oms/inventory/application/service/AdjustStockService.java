@@ -5,11 +5,12 @@ import com.dotran.oms.inventory.application.dto.InventoryDetailDto;
 import com.dotran.oms.inventory.application.mapper.InventoryMapper;
 import com.dotran.oms.inventory.application.repository.InventoryRepository;
 import com.dotran.oms.inventory.application.repository.StockMovementRepository;
+import com.dotran.oms.inventory.application.repository.TenantRepository;
 import com.dotran.oms.inventory.application.usecase.inventory.AdjustStockUseCase;
+import com.dotran.oms.inventory.domain.exception.InsufficientStockException;
 import com.dotran.oms.inventory.domain.model.Inventory;
 import com.dotran.oms.inventory.domain.model.StockMovement;
 import com.dotran.oms.core.annotation.UseCase;
-import com.dotran.oms.core.cloud.dynamodb.DynamoDbTenantInfoRepository;
 import com.dotran.oms.core.domain.TenantInfo;
 import com.dotran.oms.core.exception.NotFoundException;
 import lombok.RequiredArgsConstructor;
@@ -23,36 +24,42 @@ public class AdjustStockService implements AdjustStockUseCase {
 
     private final InventoryRepository repository;
     private final StockMovementRepository stockMovementRepository;
-    private final DynamoDbTenantInfoRepository dynamoDbTenantInfoRepository;
+    private final TenantRepository tenantRepository;
     private final InventoryMapper inventoryMapper;
 
     @Override
     @Transactional
     public InventoryDetailDto adjust(AdjustStockCmd cmd) {
-        TenantInfo tenantInfo = dynamoDbTenantInfoRepository.findByTenantId(cmd.getTenantId())
+        tenantRepository.findByTenantId(cmd.getTenantId())
                 .orElseThrow(() -> new NotFoundException("Tenant not found"));
 
         Inventory inventory = repository.getById(cmd.getInventoryId())
                 .orElseThrow(() -> new NotFoundException("Inventory not found"));
 
-        inventory.validateTenantAndStore(tenantInfo.getId(), cmd.getStoreId());
+        inventory.validateTenantAndStore(cmd.getTenantId(), cmd.getStoreId());
+        inventory.adjust(cmd.getMovementType(), cmd.getQuantity()); // domain validation
 
-        inventory.adjust(cmd.getMovementType(), cmd.getQuantity());
+        int updated = cmd.getMovementType().isStockIn()
+                ? repository.stockIn(cmd.getInventoryId(), cmd.getTenantId(), cmd.getStoreId(), cmd.getQuantity())
+                : repository.stockOut(cmd.getInventoryId(), cmd.getTenantId(), cmd.getStoreId(), cmd.getQuantity());
 
-        StockMovement newStockMovement = StockMovement.newInstance(
+        if (updated == 0) {
+            throw new InsufficientStockException();
+        }
+
+        StockMovement savedStockMovement = stockMovementRepository.create(StockMovement.newInstance(
                 inventory,
                 cmd.getMovementType(),
                 cmd.getQuantity(),
+                cmd.getReferenceType(),
+                cmd.getReferenceId(),
                 cmd.getReason()
-        );
+        ));
 
-        Inventory savedInventory = repository.update(inventory);
-        StockMovement savedStockMovement = stockMovementRepository.create(newStockMovement);
-
-        log.info("Inventory updated: id = {}, type: {}, quantity: {}",
-                savedInventory.getId().getValue(), cmd.getMovementType(), cmd.getQuantity());
+        log.info("Inventory adjusted: id = {}, type: {}, quantity: {}",
+                inventory.getId().getValue(), cmd.getMovementType(), cmd.getQuantity());
         log.info("Stock movement created: id = {}", savedStockMovement.getId().getValue());
 
-        return inventoryMapper.toDetailDto(savedInventory);
+        return inventoryMapper.toDetailDto(inventory);
     }
 }

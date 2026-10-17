@@ -31,7 +31,6 @@ public abstract class InventoryPersistenceMapper {
     @Mapping(target = "storeId", source = "storeId.value")
     @Mapping(target = "storeProductId", source = "productId.value")
     @Mapping(target = "sku", source = "sku.value")
-    @Mapping(target = "version", ignore = true)
     public abstract InventoryEntity fromInventory(Inventory inventory);
 
     @BeanMapping(ignoreByDefault = true)

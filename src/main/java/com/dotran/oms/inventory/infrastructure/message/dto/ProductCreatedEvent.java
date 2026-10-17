@@ -1,4 +1,4 @@
-package com.dotran.oms.inventory.domain.event;
+package com.dotran.oms.inventory.infrastructure.message.dto;
 
 import com.dotran.oms.core.domain.id.SKU;
 import lombok.AccessLevel;
