@@ -53,6 +53,11 @@ Plain JUnit 5 + Mockito (`@ExtendWith(MockitoExtension.class)`), no Spring conte
 The conditional SQL is therefore **not** covered by tests — reason about it explicitly when you change it.
 Run: `./gradlew test`.
 
+## Git workflow
+
+Branch **from `develop`** and open PRs **into `develop`** (`feature/...`, `fix/...`, `docs/...`).
+`master` only receives `develop` through release PRs — never target `master` directly.
+
 ## Build & run
 
 Needs `../oms-core` next to this repo (composite build) — use `oms-workspace/scripts/sync-repos.sh`.
