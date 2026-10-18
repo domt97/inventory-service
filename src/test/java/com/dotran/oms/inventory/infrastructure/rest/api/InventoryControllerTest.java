@@ -1,13 +1,10 @@
 package com.dotran.oms.inventory.infrastructure.rest.api;
 
 import com.dotran.oms.inventory.application.command.AdjustStockCmd;
-import com.dotran.oms.inventory.application.command.CreateInventoryCmd;
 import com.dotran.oms.inventory.application.dto.InventoryDetailDto;
 import com.dotran.oms.inventory.application.usecase.inventory.AdjustStockUseCase;
-import com.dotran.oms.inventory.application.usecase.inventory.CreateInventoryUseCase;
 import com.dotran.oms.inventory.application.usecase.inventory.LoadInventoryUseCase;
 import com.dotran.oms.inventory.infrastructure.rest.dto.request.AdjustStockRequest;
-import com.dotran.oms.inventory.infrastructure.rest.dto.request.CreateInventoryRequest;
 import com.dotran.oms.inventory.infrastructure.rest.dto.response.InventoryDetailResponse;
 import com.dotran.oms.inventory.infrastructure.rest.mapper.InventoryRestMapper;
 import com.dotran.oms.core.domain.id.InventoryId;
@@ -31,9 +28,6 @@ import static org.mockito.Mockito.*;
 class InventoryControllerTest {
 
     @Mock
-    private CreateInventoryUseCase createInventoryUseCase;
-
-    @Mock
     private AdjustStockUseCase adjustStockUseCase;
 
     @Mock
@@ -44,25 +38,6 @@ class InventoryControllerTest {
 
     @InjectMocks
     private InventoryController controller;
-
-    @Test
-    @DisplayName("create — maps request to command, calls use case, maps each DTO to response")
-    void shouldCreateInventory() {
-        CreateInventoryRequest request = mock(CreateInventoryRequest.class);
-        CreateInventoryCmd cmd = mock(CreateInventoryCmd.class);
-        InventoryDetailDto dto = mock(InventoryDetailDto.class);
-        InventoryDetailResponse response = mock(InventoryDetailResponse.class);
-
-        when(restMapper.toCreateInventoryCmd(request)).thenReturn(cmd);
-        when(createInventoryUseCase.create(cmd)).thenReturn(List.of(dto));
-        when(restMapper.toInventoryDetailResponse(dto)).thenReturn(response);
-
-        List<InventoryDetailResponse> result = controller.create(request);
-
-        assertEquals(1, result.size());
-        assertSame(response, result.get(0));
-        verify(createInventoryUseCase).create(cmd);
-    }
 
     @Test
     @DisplayName("adjustStock — maps request and path id to command, calls use case, maps result")
