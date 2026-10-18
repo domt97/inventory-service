@@ -37,7 +37,7 @@ import java.util.UUID;
 @Tag(name = "Inventory Management", description = "APIs for managing inventory lifecycle")
 @WebAdapter
 @RestController
-@RequestMapping(value = "/v1/inventories")
+@RequestMapping(value = "/v1/inventory/inventories")
 @RequiredArgsConstructor
 @Slf4j
 public class InventoryController {

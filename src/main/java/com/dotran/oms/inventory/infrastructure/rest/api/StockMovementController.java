@@ -26,7 +26,7 @@ import java.util.UUID;
 @Tag(name = "Stock Movement Management", description = "APIs for managing Stock Movement lifecycle")
 @WebAdapter
 @RestController
-@RequestMapping(value = "/v1/inventories/stock-movement")
+@RequestMapping(value = "/v1/inventory/inventories/stock-movements")
 @RequiredArgsConstructor
 @Slf4j
 public class StockMovementController {
