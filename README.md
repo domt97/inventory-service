@@ -236,6 +236,8 @@ src/main/java/com/dotran/oms/inventory/
     │   ├── api/
     │   │   ├── InventoryController.java
     │   │   └── StockMovementController.java
+    │   ├── internal/
+    │   │   └── InventoryInternalController.java  # hidden from Swagger, internal only
     │   ├── dto/request|response/
     │   └── mapper/
     ├── persistence/                 # JPA (@PersistenceAdapter)
@@ -357,18 +359,18 @@ http://localhost:8058/swagger-ui.html
 
 ### Inventory
 
-| Method | Path | Description |
-|--------|------|-------------|
-| `POST` | `/v1/inventories` | Create inventory records for a product's SKUs |
-| `GET` | `/v1/inventories/{inventoryId}` | Get inventory by ID |
-| `GET` | `/v1/inventories/products/{productId}` | Get all inventories for a product |
-| `POST` | `/v1/inventories/{inventoryId}` | Adjust stock (`movementType`: any `StockMovementType`) |
+| Method | Path | Visibility | Description |
+|--------|------|------------|-------------|
+| `POST` | `/internal/v1/inventory/inventories` | Internal only | Create inventory records for a product's SKUs (triggered by `ProductCreated` event; hidden from Swagger, blocked at gateway) |
+| `GET` | `/v1/inventory/inventories/{inventoryId}` | Public | Get inventory by ID |
+| `GET` | `/v1/inventory/inventories/products/{productId}` | Public | Get all inventories for a product |
+| `POST` | `/v1/inventory/inventories/{inventoryId}` | Public | Adjust stock (`movementType`: any `StockMovementType`) |
 
 ### Stock Movements
 
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/v1/inventories/stock-movement/{inventoryId}` | Get stock movement history of one inventory |
+| Method | Path | Visibility | Description |
+|--------|------|------------|-------------|
+| `GET` | `/v1/inventory/inventories/stock-movements/{inventoryId}` | Public | Get stock movement history of one inventory |
 
 > Reservation operations (reserve, confirm, expire) are triggered internally via messaging, not direct API calls.
 
