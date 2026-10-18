@@ -1,13 +1,10 @@
 package com.dotran.oms.inventory.infrastructure.rest.api;
 
 import com.dotran.oms.inventory.application.command.AdjustStockCmd;
-import com.dotran.oms.inventory.application.command.CreateInventoryCmd;
 import com.dotran.oms.inventory.application.dto.InventoryDetailDto;
 import com.dotran.oms.inventory.application.usecase.inventory.AdjustStockUseCase;
-import com.dotran.oms.inventory.application.usecase.inventory.CreateInventoryUseCase;
 import com.dotran.oms.inventory.application.usecase.inventory.LoadInventoryUseCase;
 import com.dotran.oms.inventory.infrastructure.rest.dto.request.AdjustStockRequest;
-import com.dotran.oms.inventory.infrastructure.rest.dto.request.CreateInventoryRequest;
 import com.dotran.oms.inventory.infrastructure.rest.dto.response.InventoryDetailResponse;
 import com.dotran.oms.inventory.infrastructure.rest.mapper.InventoryRestMapper;
 import com.dotran.oms.core.annotation.WebAdapter;
@@ -42,29 +39,9 @@ import java.util.UUID;
 @Slf4j
 public class InventoryController {
 
-    private final CreateInventoryUseCase createInventoryUseCase;
     private final AdjustStockUseCase adjustStockUseCase;
     private final LoadInventoryUseCase loadInventoryUseCase;
     private final InventoryRestMapper restMapper;
-
-    @Operation(summary = "Create a new inventory", description = "Creates a new inventory for the specified store product sku")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "201", description = "Inventory created successfully",
-                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = InventoryDetailResponse.class))),
-            @ApiResponse(responseCode = "400", description = "Invalid request body", content = @Content),
-            @ApiResponse(responseCode = "409", description = "Inventory already exists", content = @Content)
-    })
-    @PostMapping
-    @ResponseStatus(HttpStatus.CREATED)
-    public List<InventoryDetailResponse> create(
-            @RequestBody @Valid CreateInventoryRequest createInventoryRequest) {
-        CreateInventoryCmd createInventoryCmd = restMapper.toCreateInventoryCmd(createInventoryRequest);
-        List<InventoryDetailDto> inventoryDetailDtoList = createInventoryUseCase.create(createInventoryCmd);
-
-        return inventoryDetailDtoList.stream()
-                .map(restMapper::toInventoryDetailResponse)
-                .toList();
-    }
 
     @Operation(summary = "Adjust stock", description = "Adjusts the stock for the specified inventory")
     @ApiResponses(value = {
