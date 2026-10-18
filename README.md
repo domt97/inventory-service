@@ -129,7 +129,8 @@ Shipment              (logistics concern — does not affect inventory)
 
 **`StockReservation`** — Aggregate Root
 - Represents a stock hold for one order line item
-- Lifecycle: `PENDING` → `CONFIRMED` | `EXPIRED`
+- Lifecycle: `RESERVED` → `CONFIRMED` | `RELEASED` | `EXPIRED` (`CANCELLED` exists in the enum, not used yet); every transition requires current status `RESERVED`
+- Default TTL: 30 minutes from creation
 - Linked to `Inventory` by `inventoryId`
 - Expires via `expires_at` timestamp, triggered by AWS EventBridge → SQS
 
@@ -277,7 +278,7 @@ tenant_id / store_id
 inventory_id    UUID FK → inventories
 order_id / order_item_id
 quantity        BIGINT NOT NULL
-status          VARCHAR(30)   -- PENDING | CONFIRMED | EXPIRED
+status          VARCHAR(30)   -- RESERVED | CONFIRMED | RELEASED | EXPIRED | CANCELLED
 expires_at      TIMESTAMPTZ
 ```
 
@@ -285,7 +286,7 @@ expires_at      TIMESTAMPTZ
 ```
 id              BIGINT PK (sequence, cache=20)
 tenant_id / store_id / inventory_id
-type            VARCHAR(30)   -- STOCK_IN | STOCK_OUT | RESERVE | etc.
+type            VARCHAR(30)   -- StockMovementType: RECEIVE | SALE | RETURN | ADJUSTMENT_IN | ADJUSTMENT_OUT | DAMAGE | TRANSFER_IN | TRANSFER_OUT
 quantity        BIGINT
 reference_type  VARCHAR(50)   -- e.g. ORDER, ADJUSTMENT
 reference_id    UUID          -- polymorphic FK
@@ -361,13 +362,13 @@ http://localhost:8058/swagger-ui.html
 | `POST` | `/v1/inventories` | Create inventory records for a product's SKUs |
 | `GET` | `/v1/inventories/{inventoryId}` | Get inventory by ID |
 | `GET` | `/v1/inventories/products/{productId}` | Get all inventories for a product |
-| `POST` | `/v1/inventories/{inventoryId}` | Adjust stock (STOCK_IN / STOCK_OUT) |
+| `POST` | `/v1/inventories/{inventoryId}` | Adjust stock (`movementType`: any `StockMovementType`) |
 
 ### Stock Movements
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/v1/stock-movements` | Get stock movement history |
+| `GET` | `/v1/inventories/stock-movement/{inventoryId}` | Get stock movement history of one inventory |
 
 > Reservation operations (reserve, confirm, expire) are triggered internally via messaging, not direct API calls.
 
