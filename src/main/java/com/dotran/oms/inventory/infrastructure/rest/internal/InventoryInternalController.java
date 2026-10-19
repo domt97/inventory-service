@@ -22,7 +22,7 @@ import java.util.List;
 @Hidden
 @WebAdapter
 @RestController
-@RequestMapping("/internal/v1/inventory-service/inventories")
+@RequestMapping("/internal/v1/inventory/inventories")
 @RequiredArgsConstructor
 public class InventoryInternalController {
 
