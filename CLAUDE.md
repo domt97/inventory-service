@@ -20,7 +20,7 @@ Publishes nothing yet (no outbox table).
 | Application | `application/usecase/{inventory,reservation,movement}` | Inbound ports `XxxUseCase` |
 | | `application/service` | `@UseCase` implementations (flat package), `@Transactional` here |
 | | `application/command`, `dto`, `repository`, `jobs` | `XxxCmd`, `XxxDto`, outbound ports |
-| Infrastructure | `infrastructure/rest/{api,dto,mapper,exception}` | Controllers under `/v1/inventories`, `InventoryExceptionHandler` |
+| Infrastructure | `infrastructure/rest/{api,internal,dto,mapper,exception}` | Public controllers under `/v1/inventory/inventories`; internal controller under `/internal/v1/inventory/inventories` (`@Hidden`); `InventoryExceptionHandler` |
 | | `infrastructure/persistence/{entity,jpa}` | Adapters, entities, `SpringDataXxxRepository` (native SQL for stock updates) |
 | | `infrastructure/message` (+ `dto`) | Kafka/SQS consumers = anti-corruption layer; external event DTOs live here, never in `domain` |
 
@@ -52,6 +52,11 @@ Publishes nothing yet (no outbox table).
 Plain JUnit 5 + Mockito (`@ExtendWith(MockitoExtension.class)`), no Spring context, no DB.
 The conditional SQL is therefore **not** covered by tests — reason about it explicitly when you change it.
 Run: `./gradlew test`.
+
+## Git workflow
+
+Branch **from `develop`** and open PRs **into `develop`** (`feature/...`, `fix/...`, `docs/...`).
+`master` only receives `develop` through release PRs — never target `master` directly.
 
 ## Build & run
 
