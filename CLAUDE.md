@@ -70,5 +70,5 @@ Infra from the `development` repo (Postgres, Kafka, LocalStack with SQS queue + 
 - **`ReserveStockService` is not idempotent per order item**: replaying the same order reserves twice.
 - **Reserve / confirm / expire do not write `StockMovement`** — only manual adjustment does, so the audit trail is incomplete.
 - `ReserveStock` and `ConfirmStockReservation` have no entry point; `OrderCreatedEventConsumer` is commented out; `ReleaseStockReservationUseCase` has no implementation.
-- REST endpoints take no `tenantId` (stores-service uses `/v1/tenants/{tenantId}/...`); `Inventory.validateTenantAndStore` exists but tenant scoping of the API is undecided.
+- REST endpoints take no `tenantId` (stores-service uses `/v1/store/tenants/{tenantId}/...`); `Inventory.validateTenantAndStore` exists but tenant scoping of the API is undecided.
 - `ProductCreatedEvent` DTO duplicates the producer's class in stores-service — keep them in sync.
