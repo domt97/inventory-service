@@ -7,7 +7,6 @@ import com.dotran.oms.core.annotation.UseCase;
 import com.dotran.oms.core.domain.id.InventoryId;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.orm.ObjectOptimisticLockingFailureException;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -45,12 +44,9 @@ public class ExpireStockReservationService implements ExpireStockReservationUseC
             List<StockReservation> reservations = entry.getValue();
             try {
                 expireByInventoryTransaction.execute(inventoryId, reservations);
-            } catch (ObjectOptimisticLockingFailureException e) {
-                log.warn(
-                        "Inventory was modified concurrently. " +
-                                "Reservations will be retried by the next execution.",
-                        e
-                );
+            } catch (RuntimeException e) {
+                // That inventory's transaction rolled back; its reservations stay RESERVED and are retried next run.
+                log.error("Reservation expiry failed for inventory {}", inventoryId, e);
             }
         }
 

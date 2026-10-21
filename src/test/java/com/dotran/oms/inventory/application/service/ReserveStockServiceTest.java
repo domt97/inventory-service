@@ -19,6 +19,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -213,5 +214,45 @@ class ReserveStockServiceTest {
         verify(inventoryRepository).reserve(inventoryId, 10L);
         verify(inventoryRepository).reserve(inventoryId2, 5L);
         verify(stockReservationRepository).createBatch(argThat(list -> list.size() == 2));
+    }
+
+    @Test
+    @DisplayName("reserves inventories in ascending inventory id order, regardless of command line order")
+    void shouldReserveInSortedInventoryOrder() {
+        SKU sku2 = SKU.of("SKU-002");
+        InventoryId highId = InventoryId.of(UUID.fromString("00000000-0000-0000-0000-000000000002"));
+        InventoryId lowId = InventoryId.of(UUID.fromString("00000000-0000-0000-0000-000000000001"));
+
+        Inventory highInventory = Inventory.builder()
+                .id(highId).tenantId(tenantId).storeId(storeId).productId(ProductId.of(UUID.randomUUID()))
+                .sku(sku).quantity(100L).reservedQuantity(0L).status(InventoryStatus.ACTIVE).build();
+        Inventory lowInventory = Inventory.builder()
+                .id(lowId).tenantId(tenantId).storeId(storeId).productId(ProductId.of(UUID.randomUUID()))
+                .sku(sku2).quantity(100L).reservedQuantity(0L).status(InventoryStatus.ACTIVE).build();
+
+        ReserveStockCmd cmd = ReserveStockCmd.builder()
+                .tenantId(tenantId)
+                .storeId(storeId)
+                .orderId(orderId)
+                .skus(List.of(
+                        ReserveStockCmd.ReserveStockSKU.builder()
+                                .sku(sku).orderItemId(OrderItemId.of(UUID.randomUUID()))
+                                .productId(ProductId.of(UUID.randomUUID())).quantity(10L).build(),
+                        ReserveStockCmd.ReserveStockSKU.builder()
+                                .sku(sku2).orderItemId(OrderItemId.of(UUID.randomUUID()))
+                                .productId(ProductId.of(UUID.randomUUID())).quantity(5L).build()
+                ))
+                .build();
+
+        when(inventoryRepository.getByStoreIdAndSKUs(storeId, List.of(sku, sku2)))
+                .thenReturn(List.of(highInventory, lowInventory));
+        when(inventoryRepository.reserve(any(), anyLong())).thenReturn(1);
+        when(stockReservationRepository.createBatch(any())).thenReturn(List.of());
+
+        reserveStockService.reserve(cmd);
+
+        InOrder inOrder = inOrder(inventoryRepository);
+        inOrder.verify(inventoryRepository).reserve(lowId, 5L);
+        inOrder.verify(inventoryRepository).reserve(highId, 10L);
     }
 }

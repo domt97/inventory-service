@@ -16,19 +16,21 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import com.dotran.oms.core.exception.NotFoundException;
-
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -124,68 +126,61 @@ class StockReservationRepositoryAdapterTest {
     }
 
     @Nested
-    @DisplayName("expire single (update)")
-    class ExpireSingle {
+    @DisplayName("markConfirmed")
+    class MarkConfirmed {
 
         @Test
-        @DisplayName("loads entity, updates status, saves, and returns mapped domain")
-        void shouldExpireSingleReservation() {
-            StockReservation reservation = buildReservation(1L);
-            StockReservationEntity entity = buildEntity(1L);
-            StockReservationEntity saved = buildEntity(1L);
+        @DisplayName("guards RESERVED -> CONFIRMED and returns only ids whose row was updated")
+        void shouldReturnOnlyTransitionedIds() {
+            when(springDataStockReservationRepository.transitionStatus(1L, "RESERVED", "CONFIRMED")).thenReturn(1);
+            when(springDataStockReservationRepository.transitionStatus(2L, "RESERVED", "CONFIRMED")).thenReturn(0);
 
-            when(springDataStockReservationRepository.findById(1L)).thenReturn(Optional.of(entity));
-            when(springDataStockReservationRepository.saveAndFlush(entity)).thenReturn(saved);
-            when(stockReservationPersistenceMapper.toDomain(saved)).thenReturn(reservation);
+            Set<StockReservationId> result = adapter.markConfirmed(
+                    List.of(new StockReservationId(1L), new StockReservationId(2L)));
 
-            StockReservation result = adapter.expire(reservation);
-
-            assertSame(reservation, result);
-            verify(stockReservationPersistenceMapper).updateStatus(reservation, entity);
+            assertEquals(Set.of(new StockReservationId(1L)), result);
+            verify(springDataStockReservationRepository, never()).saveAllAndFlush(any());
+            verify(springDataStockReservationRepository, never()).findAllById(any());
         }
 
         @Test
-        @DisplayName("throws NotFoundException when reservation to expire does not exist")
-        void shouldThrowWhenNotFound() {
-            StockReservation reservation = buildReservation(1L);
+        @DisplayName("returns empty set without querying when input is empty")
+        void shouldNotQueryWhenEmpty() {
+            Set<StockReservationId> result = adapter.markConfirmed(List.of());
 
-            when(springDataStockReservationRepository.findById(1L)).thenReturn(Optional.empty());
-
-            assertThrows(NotFoundException.class, () -> adapter.expire(reservation));
-            verify(springDataStockReservationRepository, never()).saveAndFlush(any());
+            assertTrue(result.isEmpty());
+            verifyNoInteractions(springDataStockReservationRepository);
         }
     }
 
     @Nested
-    @DisplayName("confirm")
-    class Confirm {
+    @DisplayName("markExpired")
+    class MarkExpired {
 
         @Test
-        @DisplayName("delegates to updateBatch — throws when some IDs not found")
-        void shouldThrowWhenSomeNotFound() {
-            StockReservation r1 = buildReservation(1L);
-            StockReservation r2 = buildReservation(2L);
+        @DisplayName("guards RESERVED -> EXPIRED, deduplicates ids and updates in ascending id order")
+        void shouldUpdateDistinctIdsInAscendingOrder() {
+            when(springDataStockReservationRepository.transitionStatus(anyLong(), eq("RESERVED"), eq("EXPIRED")))
+                    .thenReturn(1);
 
-            when(springDataStockReservationRepository.findAllById(any())).thenReturn(List.of(buildEntity(1L)));
+            Set<StockReservationId> result = adapter.markExpired(List.of(
+                    new StockReservationId(3L), new StockReservationId(1L), new StockReservationId(3L)));
 
-            assertThrows(IllegalStateException.class, () -> adapter.confirm(List.of(r1, r2)));
+            assertEquals(Set.of(new StockReservationId(1L), new StockReservationId(3L)), result);
+            InOrder inOrder = inOrder(springDataStockReservationRepository);
+            inOrder.verify(springDataStockReservationRepository).transitionStatus(1L, "RESERVED", "EXPIRED");
+            inOrder.verify(springDataStockReservationRepository).transitionStatus(3L, "RESERVED", "EXPIRED");
+            verify(springDataStockReservationRepository, times(2)).transitionStatus(anyLong(), any(), any());
         }
 
         @Test
-        @DisplayName("updates all reservations and returns mapped domain objects")
-        void shouldConfirmAllReservations() {
-            StockReservation r1 = buildReservation(1L);
-            StockReservationEntity entity = buildEntity(1L);
-            StockReservationEntity saved = buildEntity(1L);
+        @DisplayName("returns empty set when every row was already handled concurrently")
+        void shouldReturnEmptyWhenNoneTransitioned() {
+            when(springDataStockReservationRepository.transitionStatus(1L, "RESERVED", "EXPIRED")).thenReturn(0);
 
-            when(springDataStockReservationRepository.findAllById(any())).thenReturn(List.of(entity));
-            when(springDataStockReservationRepository.saveAllAndFlush(any())).thenReturn(List.of(saved));
-            when(stockReservationPersistenceMapper.toDomain(saved)).thenReturn(r1);
+            Set<StockReservationId> result = adapter.markExpired(List.of(new StockReservationId(1L)));
 
-            List<StockReservation> result = adapter.confirm(List.of(r1));
-
-            assertEquals(1, result.size());
-            verify(stockReservationPersistenceMapper).updateStatus(r1, entity);
+            assertTrue(result.isEmpty());
         }
     }
 
@@ -219,41 +214,6 @@ class StockReservationRepositoryAdapterTest {
             Optional<StockReservation> result = adapter.getById(id);
 
             assertTrue(result.isEmpty());
-        }
-    }
-
-    @Nested
-    @DisplayName("expire batch (updateBatch)")
-    class ExpireBatch {
-
-        @Test
-        @DisplayName("throws IllegalStateException when some reservation IDs are not found in DB")
-        void shouldThrowWhenSomeReservationsNotFound() {
-            StockReservation r1 = buildReservation(1L);
-            StockReservation r2 = buildReservation(2L);
-
-            // only ID 1 found
-            when(springDataStockReservationRepository.findAllById(any())).thenReturn(List.of(buildEntity(1L)));
-
-            assertThrows(IllegalStateException.class,
-                    () -> adapter.expire(List.of(r1, r2)));
-        }
-
-        @Test
-        @DisplayName("saves all entities when all IDs found and returns mapped domain objects")
-        void shouldSaveAllWhenAllFound() {
-            StockReservation r1 = buildReservation(1L);
-            StockReservationEntity entity = buildEntity(1L);
-            StockReservationEntity saved = buildEntity(1L);
-
-            when(springDataStockReservationRepository.findAllById(any())).thenReturn(List.of(entity));
-            when(springDataStockReservationRepository.saveAllAndFlush(any())).thenReturn(List.of(saved));
-            when(stockReservationPersistenceMapper.toDomain(saved)).thenReturn(r1);
-
-            List<StockReservation> result = adapter.expire(List.of(r1));
-
-            assertEquals(1, result.size());
-            verify(springDataStockReservationRepository).saveAllAndFlush(any());
         }
     }
 

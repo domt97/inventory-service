@@ -33,7 +33,19 @@ Publishes nothing yet (no outbox table).
   (`Inventory.reserve()` etc.) validates first, but **the SQL guard is what prevents oversell** under concurrency.
   Keep this pattern for any new stock operation; do not load-modify-save quantities.
 - `StockReservation` transitions only from `RESERVED` → `CONFIRMED` | `RELEASED` | `EXPIRED`. TTL is 30 min (`StockReservation.reserve`).
-- Expiry runs per inventory in its own transaction (`ExpireByInventoryTransaction`, `REQUIRES_NEW`) so one failure does not roll back others.
+  The domain method states the rule; the **guarded UPDATE enforces it**: `StockReservationRepository.markConfirmed` / `markExpired`
+  run `UPDATE ... WHERE id = :id AND status = 'RESERVED'` per id (ascending) and return the ids that won. Change
+  `reserved_quantity` only for the winners. Never save a reservation status via load-modify-save; a new transition
+  (e.g. release) gets its own guarded `markXxx` method.
+- **Lock order**: reservation status updates by id ascending, then inventory rows in Java `UUID.compareTo` order
+  (`ReserveStockService` sorts lines, `ConfirmStockReservationService` uses a `TreeMap` with the same comparator).
+  Java and Postgres order UUIDs differently, so any new multi-inventory locker must use the same Java comparator
+  (not SQL `ORDER BY id ... FOR UPDATE`). Keep it, or deadlocks return.
+- Confirm is idempotent per order: all `CONFIRMED` → no-op; any `EXPIRED`/`RELEASED` → `InvalidReservationStateException` ("not RESERVED", final);
+  a lost guarded update → `InvalidReservationStateException` ("modified concurrently", retry resolves it) and the whole transaction rolls back.
+- Expiry runs per inventory in its own transaction (`ExpireByInventoryTransaction`, `REQUIRES_NEW`) so one failure does not roll back others;
+  `ExpireStockReservationService` catches any `RuntimeException` per inventory, logs `Reservation expiry failed for inventory {}` and continues
+  (the rolled-back reservations stay `RESERVED` and are retried on the next tick; the SQS message is still acknowledged).
 - `inventories` is unique on (store_id, sku).
 
 ## Adding a use case — checklist
@@ -68,8 +80,6 @@ Infra from the `development` repo (Postgres, Kafka, LocalStack with SQS queue + 
 
 - **`ReserveStockService` is not idempotent per order item**: replaying the same order reserves twice.
 - **Reserve / confirm / expire do not write `StockMovement`** — only manual adjustment does, so the audit trail is incomplete.
-- **Confirm vs expire race on the same reservation (oversell risk)**: both load it as `RESERVED` and save via load-modify-save (`StockReservationRepositoryAdapter.updateBatch`) with no `WHERE status = 'RESERVED'` and no `@Version`; if both run, `reserved_quantity` is decremented twice. Any new code changing reservation status must use a guarded UPDATE and check the row count.
-- **Expiry run aborts on the first failure**: `ExpireStockReservationService` only catches `ObjectOptimisticLockingFailureException`, which cannot be thrown (no `@Version`); any other exception stops the remaining inventories of that run.
 - **Kafka consumers have no dead-letter topic**: spring-kafka default = 10 attempts, no backoff, then the record is skipped. SQS `reservation-expire` has no DLQ.
 - `ReserveStock` and `ConfirmStockReservation` have no entry point; `OrderCreatedEventConsumer` is commented out; `ReleaseStockReservationUseCase` has no implementation.
 - REST endpoints take no `tenantId` (stores-service uses `/v1/store/tenants/{tenantId}/...`); `Inventory.validateTenantAndStore` exists but tenant scoping of the API is undecided.

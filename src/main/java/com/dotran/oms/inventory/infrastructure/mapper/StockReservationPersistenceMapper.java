@@ -3,10 +3,8 @@ package com.dotran.oms.inventory.infrastructure.mapper;
 import com.dotran.oms.inventory.common.mapper.InternalIdMapper;
 import com.dotran.oms.inventory.domain.model.StockReservation;
 import com.dotran.oms.inventory.infrastructure.persistence.entity.StockReservationEntity;
-import org.mapstruct.BeanMapping;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
-import org.mapstruct.MappingTarget;
 import org.springframework.beans.factory.annotation.Autowired;
 
 @Mapper(
@@ -33,10 +31,4 @@ public abstract class StockReservationPersistenceMapper {
     @Mapping(target = "orderId", expression = "java(idMapper.toOrderId(entity.getOrderId()))")
     @Mapping(target = "orderItemId", expression = "java(idMapper.toOrderItemId(entity.getOrderItemId()))")
     public abstract StockReservation toDomain(StockReservationEntity entity);
-
-    @BeanMapping(ignoreByDefault = true)
-    @Mapping(target = "status", source = "status")
-    @Mapping(target = "updatedAt", source = "updatedAt")
-    public abstract void updateStatus(StockReservation stockReservation,
-                                      @MappingTarget StockReservationEntity entity);
 }

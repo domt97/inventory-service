@@ -16,6 +16,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -65,7 +66,12 @@ public class ReserveStockService implements ReserveStockUseCase {
 
         List<StockReservation> reservations = new ArrayList<>();
 
-        for (ReserveStockCmd.ReserveStockSKU reserveStockSKU : reserveStockCmd.getSkus()) {
+        // Sorted by inventory id so concurrent transactions lock inventory rows in the same order.
+        List<ReserveStockCmd.ReserveStockSKU> sortedSkus = reserveStockCmd.getSkus().stream()
+                .sorted(Comparator.comparing(line -> inventoryMap.get(line.getSku()).getId().getValue()))
+                .toList();
+
+        for (ReserveStockCmd.ReserveStockSKU reserveStockSKU : sortedSkus) {
             Inventory inventory = inventoryMap.get(reserveStockSKU.getSku());
 
             inventory.reserve(reserveStockSKU.getQuantity());
