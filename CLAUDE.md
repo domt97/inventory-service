@@ -68,6 +68,9 @@ Infra from the `development` repo (Postgres, Kafka, LocalStack with SQS queue + 
 
 - **`ReserveStockService` is not idempotent per order item**: replaying the same order reserves twice.
 - **Reserve / confirm / expire do not write `StockMovement`** — only manual adjustment does, so the audit trail is incomplete.
+- **Confirm vs expire race on the same reservation (oversell risk)**: both load it as `RESERVED` and save via load-modify-save (`StockReservationRepositoryAdapter.updateBatch`) with no `WHERE status = 'RESERVED'` and no `@Version`; if both run, `reserved_quantity` is decremented twice. Any new code changing reservation status must use a guarded UPDATE and check the row count.
+- **Expiry run aborts on the first failure**: `ExpireStockReservationService` only catches `ObjectOptimisticLockingFailureException`, which cannot be thrown (no `@Version`); any other exception stops the remaining inventories of that run.
+- **Kafka consumers have no dead-letter topic**: spring-kafka default = 10 attempts, no backoff, then the record is skipped. SQS `reservation-expire` has no DLQ.
 - `ReserveStock` and `ConfirmStockReservation` have no entry point; `OrderCreatedEventConsumer` is commented out; `ReleaseStockReservationUseCase` has no implementation.
 - REST endpoints take no `tenantId` (stores-service uses `/v1/store/tenants/{tenantId}/...`); `Inventory.validateTenantAndStore` exists but tenant scoping of the API is undecided.
 - `ProductCreatedEvent` DTO duplicates the producer's class in stores-service — keep them in sync.
