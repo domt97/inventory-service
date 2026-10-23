@@ -1,6 +1,5 @@
 package com.dotran.oms.inventory.infrastructure.persistence.jpa;
 
-import com.dotran.oms.inventory.domain.enums.ReservationStatus;
 import com.dotran.oms.inventory.infrastructure.persistence.entity.StockReservationEntity;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
@@ -15,7 +14,21 @@ public interface SpringDataStockReservationRepository extends JpaRepository<Stoc
 
     List<StockReservationEntity> findByOrderId(UUID orderId);
 
-    List<StockReservationEntity> findByStatusAndExpiresAtBefore(ReservationStatus status, Instant expiresAtBefore);
+    // status stays a literal: the partial index idx_stock_reservation_expiry (WHERE status = 'RESERVED') is only
+    // usable when the planner can prove the predicate, which a bound parameter prevents once pgjdbc uses a generic plan.
+    @Query(value = """
+        SELECT *
+        FROM stock_reservations
+        WHERE status = 'RESERVED'
+          AND expires_at < :expiresAtBefore
+          AND (expires_at, id) > (:afterExpiresAt, :afterId)
+        ORDER BY expires_at, id
+        LIMIT :limit
+        """, nativeQuery = true)
+    List<StockReservationEntity> findExpiredAfter(@Param("expiresAtBefore") Instant expiresAtBefore,
+                                                  @Param("afterExpiresAt") Instant afterExpiresAt,
+                                                  @Param("afterId") long afterId,
+                                                  @Param("limit") int limit);
 
     @Modifying
     @Query(value = """

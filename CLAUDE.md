@@ -20,6 +20,7 @@ Publishes nothing yet (no outbox table).
 | Application | `application/usecase/{inventory,reservation,movement}` | Inbound ports `XxxUseCase` |
 | | `application/service` | `@UseCase` implementations (flat package), `@Transactional` here |
 | | `application/command`, `dto`, `repository`, `jobs` | `XxxCmd`, `XxxDto`, outbound ports |
+| | `application/config` | `@ConfigurationProperties` used by use cases (`ReservationExpiryProperties`) |
 | Infrastructure | `infrastructure/rest/{api,internal,dto,mapper,exception}` | Public controllers under `/v1/inventory/inventories`; internal controller under `/internal/v1/inventory/inventories` (`@Hidden`); `InventoryExceptionHandler` |
 | | `infrastructure/persistence/{entity,jpa}` | Adapters, entities, `SpringDataXxxRepository` (native SQL for stock updates) |
 | | `infrastructure/message` (+ `dto`) | Kafka/SQS consumers = anti-corruption layer; external event DTOs live here, never in `domain` |
@@ -46,6 +47,14 @@ Publishes nothing yet (no outbox table).
 - Expiry runs per inventory in its own transaction (`ExpireByInventoryTransaction`, `REQUIRES_NEW`) so one failure does not roll back others;
   `ExpireStockReservationService` catches any `RuntimeException` per inventory, logs `Reservation expiry failed for inventory {}` and continues
   (the rolled-back reservations stay `RESERVED` and are retried on the next tick; the SQS message is still acknowledged).
+- **The expiry tick is only a signal; each sweep is bounded.** `ExpireStockReservationService` pages `RESERVED` rows past `expires_at`
+  in `(expires_at, id)` order with a keyset cursor (`ExpiryCursor`, `batch-size` 500) and stops starting pages after `time-budget` (40 s);
+  the rest waits for the next tick. The cursor only moves forward, so a failing inventory cannot block the rest of a run. The query keeps
+  `status = 'RESERVED'` as a literal so the partial index `idx_stock_reservation_expiry` (V2) is used.
+  `SqsReservationExpireConsumer` takes one tick at a time (`maxConcurrentMessages = 1`, visibility 90 s > time budget) and drops a tick older
+  than `max-tick-age` (2 min) **only if this instance swept within `max-tick-age`** (fails open: missing/bad/future timestamp → run).
+  There is no cross-instance lock: overlapping sweeps on two instances are safe because of the guarded `markExpired`. Settings live in
+  `app.reservation-expiry` (`ReservationExpiryProperties`, validated at startup).
 - `inventories` is unique on (store_id, sku).
 
 ## Adding a use case — checklist
@@ -56,7 +65,7 @@ Publishes nothing yet (no outbox table).
 4. **Audit**: write a `StockMovement` with the right `StockMovementType`, `reference_type` and `reference_id` for every quantity change.
 5. **Entry point**: REST controller or a consumer in `infrastructure/message`. Consumers map the external DTO to a command and must be **idempotent** (Kafka delivery is at-least-once).
 6. **Errors**: map in `InventoryExceptionHandler` (extends `oms-core` `GlobalExceptionHandler`).
-7. **Migration**: `src/main/resources/db/migration/V<next>__<what>.sql` (latest is `V1`); every table has `tenant_id`.
+7. **Migration**: `src/main/resources/db/migration/V<next>__<what>.sql` (latest is `V2`); every table has `tenant_id`.
 8. **Tests** mirroring the package: domain, service, adapter, controller/consumer.
 
 ## Tests

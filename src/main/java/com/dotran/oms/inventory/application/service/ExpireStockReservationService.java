@@ -1,5 +1,7 @@
 package com.dotran.oms.inventory.application.service;
 
+import com.dotran.oms.inventory.application.config.ReservationExpiryProperties;
+import com.dotran.oms.inventory.application.repository.ExpiryCursor;
 import com.dotran.oms.inventory.application.repository.StockReservationRepository;
 import com.dotran.oms.inventory.application.usecase.reservation.ExpireStockReservationUseCase;
 import com.dotran.oms.inventory.domain.model.StockReservation;
@@ -8,6 +10,7 @@ import com.dotran.oms.core.domain.id.InventoryId;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -21,18 +24,57 @@ public class ExpireStockReservationService implements ExpireStockReservationUseC
 
     private final StockReservationRepository stockReservationRepository;
     private final ExpireByInventoryTransaction expireByInventoryTransaction;
+    private final ReservationExpiryProperties reservationExpiryProperties;
+    private final Clock clock;
 
+    /**
+     * Expires reservations page by page in {@code (expires_at, id)} order until none is left, a page is not full,
+     * or the time budget is used up; whatever is left is picked up by the next tick. The cursor only moves forward,
+     * so reservations of an inventory that failed (still {@code RESERVED}) do not block the rest of this run.
+     */
     @Override
     public void execute() {
-        Instant startedAt = Instant.now();
+        Instant startedAt = clock.instant();
+        Instant deadline = startedAt.plus(reservationExpiryProperties.getTimeBudget());
+        int batchSize = reservationExpiryProperties.getBatchSize();
         log.info("Executing ExpireStockReservationService at {}", startedAt);
 
-        List<StockReservation> expiredReservations = stockReservationRepository.getExpiredReservations(startedAt);
-        if (expiredReservations.isEmpty()) {
+        ExpiryCursor cursor = ExpiryCursor.start();
+        int batches = 0;
+        long reservationsSeen = 0;
+        while (true) {
+            if (!clock.instant().isBefore(deadline)) {
+                log.info("Expiry time budget {} reached after {} batches; remaining expired reservations are left for the next tick",
+                        reservationExpiryProperties.getTimeBudget(), batches);
+                break;
+            }
+
+            List<StockReservation> batch = stockReservationRepository.getExpiredReservations(startedAt, cursor, batchSize);
+            if (batch.isEmpty()) {
+                break;
+            }
+            batches++;
+            reservationsSeen += batch.size();
+
+            expireByInventory(batch);
+
+            cursor = ExpiryCursor.after(batch.get(batch.size() - 1));
+            if (batch.size() < batchSize) {
+                break;
+            }
+        }
+
+        if (reservationsSeen == 0) {
             log.info("No expired stock reservations found at {}", startedAt);
             return;
         }
 
+        Instant finishedAt = clock.instant();
+        log.info("Finished executing ExpireStockReservationService at {}, batches: {}, reservations: {}, duration: {}",
+                finishedAt, batches, reservationsSeen, Duration.between(startedAt, finishedAt));
+    }
+
+    private void expireByInventory(List<StockReservation> expiredReservations) {
         Map<InventoryId, List<StockReservation>> expiredByInventory =
                 expiredReservations.stream()
                         .collect(Collectors.groupingBy(
@@ -49,9 +91,5 @@ public class ExpireStockReservationService implements ExpireStockReservationUseC
                 log.error("Reservation expiry failed for inventory {}", inventoryId, e);
             }
         }
-
-        Instant finishedAt = Instant.now();
-        log.info("Finished executing ExpireStockReservationService at {}, duration: {}",
-                finishedAt, Duration.between(startedAt, finishedAt));
     }
 }

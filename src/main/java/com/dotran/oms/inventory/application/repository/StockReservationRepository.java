@@ -34,7 +34,11 @@ public interface StockReservationRepository {
      */
     Set<StockReservationId> markConfirmed(Collection<StockReservationId> stockReservationIds);
 
-    List<StockReservation> getExpiredReservations(Instant expiresAtBefore);
+    /**
+     * One page of {@code RESERVED} reservations with {@code expires_at < expiresAtBefore}, ordered by
+     * {@code (expires_at, id)} and strictly after {@code after}. Reservations without {@code expires_at} never match.
+     */
+    List<StockReservation> getExpiredReservations(Instant expiresAtBefore, ExpiryCursor after, int limit);
 
     Optional<StockReservation> getById(StockReservationId stockReservationId);
 }
