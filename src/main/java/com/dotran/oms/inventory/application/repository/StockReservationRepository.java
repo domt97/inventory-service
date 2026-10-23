@@ -5,8 +5,10 @@ import com.dotran.oms.inventory.domain.model.StockReservation;
 import com.dotran.oms.core.domain.id.OrderId;
 
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 public interface StockReservationRepository {
 
@@ -14,13 +16,23 @@ public interface StockReservationRepository {
 
     List<StockReservation> createBatch(List<StockReservation> stockReservations);
 
-    StockReservation expire(StockReservation stockReservation);
-
-    List<StockReservation> expire(List<StockReservation> stockReservations);
+    /**
+     * Guarded transition {@code RESERVED -> EXPIRED}, one conditional UPDATE per reservation in ascending id order.
+     * Must run inside the caller's transaction.
+     *
+     * @return ids whose row was still {@code RESERVED} and is now {@code EXPIRED}; any other id was handled concurrently
+     */
+    Set<StockReservationId> markExpired(Collection<StockReservationId> stockReservationIds);
 
     List<StockReservation> getByOrderId(OrderId orderId);
 
-    List<StockReservation> confirm(List<StockReservation> stockReservations);
+    /**
+     * Guarded transition {@code RESERVED -> CONFIRMED}, one conditional UPDATE per reservation in ascending id order.
+     * Must run inside the caller's transaction.
+     *
+     * @return ids whose row was still {@code RESERVED} and is now {@code CONFIRMED}; any other id was handled concurrently
+     */
+    Set<StockReservationId> markConfirmed(Collection<StockReservationId> stockReservationIds);
 
     List<StockReservation> getExpiredReservations(Instant expiresAtBefore);
 
