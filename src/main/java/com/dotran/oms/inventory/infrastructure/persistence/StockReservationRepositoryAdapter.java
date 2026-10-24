@@ -1,5 +1,6 @@
 package com.dotran.oms.inventory.infrastructure.persistence;
 
+import com.dotran.oms.inventory.application.repository.ExpiryCursor;
 import com.dotran.oms.inventory.application.repository.StockReservationRepository;
 import com.dotran.oms.inventory.common.id.StockReservationId;
 import com.dotran.oms.inventory.domain.enums.ReservationStatus;
@@ -71,9 +72,9 @@ public class StockReservationRepositoryAdapter implements StockReservationReposi
     }
 
     @Override
-    public List<StockReservation> getExpiredReservations(Instant expiresAtBefore) {
+    public List<StockReservation> getExpiredReservations(Instant expiresAtBefore, ExpiryCursor after, int limit) {
         List<StockReservationEntity> entities = springDataStockReservationRepository
-                .findByStatusAndExpiresAtBefore(ReservationStatus.RESERVED, expiresAtBefore);
+                .findExpiredAfter(expiresAtBefore, after.expiresAt(), after.id().getValue(), limit);
 
         return entities.stream()
                 .map(stockReservationPersistenceMapper::toDomain)

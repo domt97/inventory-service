@@ -1,5 +1,6 @@
 package com.dotran.oms.inventory.infrastructure.persistence;
 
+import com.dotran.oms.inventory.application.repository.ExpiryCursor;
 import com.dotran.oms.inventory.common.id.StockReservationId;
 import com.dotran.oms.inventory.domain.enums.ReservationStatus;
 import com.dotran.oms.inventory.domain.model.StockReservation;
@@ -222,32 +223,35 @@ class StockReservationRepositoryAdapterTest {
     class GetExpiredReservations {
 
         @Test
-        @DisplayName("queries by RESERVED status and expiry timestamp, returns mapped domain objects")
+        @DisplayName("passes expiry bound, cursor position and limit to the keyset query, returns mapped domain objects")
         void shouldReturnExpiredReservations() {
             Instant now = Instant.now();
-            StockReservationEntity entity = buildEntity(1L);
-            StockReservation reservation = buildReservation(1L);
+            Instant cursorExpiresAt = now.minusSeconds(300);
+            ExpiryCursor cursor = new ExpiryCursor(cursorExpiresAt, new StockReservationId(42L));
+            StockReservationEntity entity = buildEntity(43L);
+            StockReservation reservation = buildReservation(43L);
 
-            when(springDataStockReservationRepository.findByStatusAndExpiresAtBefore(ReservationStatus.RESERVED, now))
+            when(springDataStockReservationRepository.findExpiredAfter(now, cursorExpiresAt, 42L, 500))
                     .thenReturn(List.of(entity));
             when(stockReservationPersistenceMapper.toDomain(entity)).thenReturn(reservation);
 
-            List<StockReservation> result = adapter.getExpiredReservations(now);
+            List<StockReservation> result = adapter.getExpiredReservations(now, cursor, 500);
 
-            assertEquals(1, result.size());
-            verify(springDataStockReservationRepository).findByStatusAndExpiresAtBefore(ReservationStatus.RESERVED, now);
+            assertEquals(List.of(reservation), result);
+            verify(springDataStockReservationRepository).findExpiredAfter(now, cursorExpiresAt, 42L, 500);
         }
 
         @Test
-        @DisplayName("returns empty list when no expired reservations found")
-        void shouldReturnEmptyWhenNoneExpired() {
+        @DisplayName("starts from the epoch and id 0 for the first page")
+        void shouldQueryFromStartCursor() {
             Instant now = Instant.now();
-            when(springDataStockReservationRepository.findByStatusAndExpiresAtBefore(any(), any()))
+            when(springDataStockReservationRepository.findExpiredAfter(now, Instant.EPOCH, 0L, 500))
                     .thenReturn(List.of());
 
-            List<StockReservation> result = adapter.getExpiredReservations(now);
+            List<StockReservation> result = adapter.getExpiredReservations(now, ExpiryCursor.start(), 500);
 
             assertTrue(result.isEmpty());
+            verify(stockReservationPersistenceMapper, never()).toDomain(any());
         }
     }
 
