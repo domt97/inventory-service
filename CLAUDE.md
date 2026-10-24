@@ -68,13 +68,6 @@ Publishes nothing yet (no outbox table).
 7. **Migration**: `src/main/resources/db/migration/V<next>__<what>.sql` (latest is `V2`); every table has `tenant_id`.
 8. **Tests** mirroring the package: domain, service, adapter, controller/consumer.
 
-**Pitfalls**
-- There is **no `lombok.config`**, so Lombok does not copy `@Value` to the constructor that `@RequiredArgsConstructor`
-  generates. `@Value` on a `final` field then makes Spring look for a bean of the field's type (e.g. `Duration`) and
-  startup fails, while unit tests that call `new` still pass. Put settings in a `@ConfigurationProperties` class
-  (see `ReservationExpiryProperties`) or write the constructor and put `@Value` on its parameter.
-- Java 17: `Duration.isPositive()` does not exist (Java 18+); use `!d.isNegative() && !d.isZero()`.
-
 ## Tests
 
 Plain JUnit 5 + Mockito (`@ExtendWith(MockitoExtension.class)`), no Spring context, no DB.
