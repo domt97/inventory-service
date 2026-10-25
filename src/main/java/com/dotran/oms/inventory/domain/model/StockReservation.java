@@ -8,7 +8,7 @@ import com.dotran.oms.core.domain.id.InventoryId;
 import com.dotran.oms.core.domain.id.OrderId;
 import com.dotran.oms.core.domain.id.OrderItemId;
 import com.dotran.oms.core.domain.id.StoreId;
-import com.dotran.oms.core.domain.id.TenantId;
+import com.dotran.oms.core.domain.id.MerchantId;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.experimental.SuperBuilder;
@@ -21,7 +21,7 @@ import java.time.temporal.ChronoUnit;
 @EqualsAndHashCode(callSuper = true)
 public class StockReservation extends BaseDomain<StockReservationId> {
 
-    private TenantId tenantId;
+    private MerchantId merchantId;
     private StoreId storeId;
 
     private InventoryId inventoryId;
@@ -38,7 +38,7 @@ public class StockReservation extends BaseDomain<StockReservationId> {
     private Instant updatedAt;
 
 
-    public static StockReservation reserve(TenantId tenantId,
+    public static StockReservation reserve(MerchantId merchantId,
                                                StoreId storeId,
                                                OrderId orderId,
                                                OrderItemId orderItemId,
@@ -46,7 +46,7 @@ public class StockReservation extends BaseDomain<StockReservationId> {
                                                long quantity) {
         Instant now = Instant.now();
         return StockReservation.builder()
-                .tenantId(tenantId)
+                .merchantId(merchantId)
                 .storeId(storeId)
                 .orderId(orderId)
                 .orderItemId(orderItemId)

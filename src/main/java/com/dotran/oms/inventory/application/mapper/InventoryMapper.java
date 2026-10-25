@@ -9,7 +9,7 @@ import org.mapstruct.Mapping;
 public abstract class InventoryMapper {
 
     @Mapping(target = "id", source = "id.value")
-    @Mapping(target = "tenantId", source = "tenantId.value")
+    @Mapping(target = "merchantId", source = "merchantId.value")
     @Mapping(target = "storeId", source = "storeId.value")
     @Mapping(target = "productId", source = "productId.value")
     @Mapping(target = "sku", source = "sku.value")

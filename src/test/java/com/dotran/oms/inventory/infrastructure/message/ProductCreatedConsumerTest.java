@@ -38,7 +38,7 @@ class ProductCreatedConsumerTest {
     @InjectMocks
     private ProductCreatedConsumer consumer;
 
-    private static final UUID TENANT_ID = UUID.randomUUID();
+    private static final UUID MERCHANT_ID = UUID.randomUUID();
     private static final UUID STORE_ID = UUID.randomUUID();
     private static final UUID PRODUCT_ID = UUID.randomUUID();
     private static final String PAYLOAD = "\"raw-json\"";
@@ -58,7 +58,7 @@ class ProductCreatedConsumerTest {
     void shouldSkipWhenSkusNull() throws JsonProcessingException {
         var event = com.dotran.oms.inventory.infrastructure.message.dto.ProductCreatedEvent.builder()
                 .eventId(UUID.randomUUID()).occurredAt(Instant.now())
-                .tenantId(TENANT_ID).storeId(STORE_ID).productId(PRODUCT_ID)
+                .merchantId(MERCHANT_ID).storeId(STORE_ID).productId(PRODUCT_ID)
                 .skus(null)
                 .build();
 
@@ -75,7 +75,7 @@ class ProductCreatedConsumerTest {
     void shouldSkipWhenSkusEmpty() throws JsonProcessingException {
         var event = com.dotran.oms.inventory.infrastructure.message.dto.ProductCreatedEvent.builder()
                 .eventId(UUID.randomUUID()).occurredAt(Instant.now())
-                .tenantId(TENANT_ID).storeId(STORE_ID).productId(PRODUCT_ID)
+                .merchantId(MERCHANT_ID).storeId(STORE_ID).productId(PRODUCT_ID)
                 .skus(Collections.emptyList())
                 .build();
 
@@ -88,13 +88,13 @@ class ProductCreatedConsumerTest {
     }
 
     @Test
-    @DisplayName("calls createInventoryUseCase with correct tenantId, storeId, productId and SKUs")
+    @DisplayName("calls createInventoryUseCase with correct merchantId, storeId, productId and SKUs")
     void shouldCreateInventoryWhenSkusPresent() throws JsonProcessingException {
         List<SKU> skus = List.of(SKU.of("SKU-001"), SKU.of("SKU-002"));
 
         var event = com.dotran.oms.inventory.infrastructure.message.dto.ProductCreatedEvent.builder()
                 .eventId(UUID.randomUUID()).occurredAt(Instant.now())
-                .tenantId(TENANT_ID).storeId(STORE_ID).productId(PRODUCT_ID)
+                .merchantId(MERCHANT_ID).storeId(STORE_ID).productId(PRODUCT_ID)
                 .skus(skus)
                 .build();
 
@@ -107,7 +107,7 @@ class ProductCreatedConsumerTest {
         verify(createInventoryUseCase).create(captor.capture());
 
         CreateInventoryCmd cmd = captor.getValue();
-        assertEquals(TENANT_ID, cmd.getTenantId().getValue());
+        assertEquals(MERCHANT_ID, cmd.getMerchantId().getValue());
         assertEquals(STORE_ID, cmd.getStoreId().getValue());
         assertEquals(PRODUCT_ID, cmd.getProductId().getValue());
         assertEquals(skus, cmd.getSkus());

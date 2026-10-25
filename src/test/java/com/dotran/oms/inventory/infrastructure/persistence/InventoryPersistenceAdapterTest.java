@@ -9,7 +9,7 @@ import com.dotran.oms.core.domain.id.InventoryId;
 import com.dotran.oms.core.domain.id.ProductId;
 import com.dotran.oms.core.domain.id.SKU;
 import com.dotran.oms.core.domain.id.StoreId;
-import com.dotran.oms.core.domain.id.TenantId;
+import com.dotran.oms.core.domain.id.MerchantId;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -44,26 +44,26 @@ class InventoryPersistenceAdapterTest {
     private InventoryPersistenceAdapter adapter;
 
     private UUID inventoryUUID;
-    private UUID tenantUUID;
+    private UUID merchantUUID;
     private UUID storeUUID;
     private InventoryId inventoryId;
-    private TenantId tenantId;
+    private MerchantId merchantId;
     private StoreId storeId;
 
     @BeforeEach
     void setUp() {
         inventoryUUID = UUID.randomUUID();
-        tenantUUID = UUID.randomUUID();
+        merchantUUID = UUID.randomUUID();
         storeUUID = UUID.randomUUID();
         inventoryId = InventoryId.of(inventoryUUID);
-        tenantId = TenantId.of(tenantUUID);
+        merchantId = MerchantId.of(merchantUUID);
         storeId = StoreId.of(storeUUID);
     }
 
     private Inventory buildInventory() {
         return Inventory.builder()
                 .id(inventoryId)
-                .tenantId(tenantId)
+                .merchantId(merchantId)
                 .storeId(storeId)
                 .productId(ProductId.of(UUID.randomUUID()))
                 .sku(SKU.of("SKU-001"))
@@ -231,11 +231,11 @@ class InventoryPersistenceAdapterTest {
             UUID id2 = UUID.randomUUID();
 
             Inventory inv1 = Inventory.builder()
-                    .id(InventoryId.of(id1)).tenantId(tenantId).storeId(storeId)
+                    .id(InventoryId.of(id1)).merchantId(merchantId).storeId(storeId)
                     .productId(ProductId.of(UUID.randomUUID())).sku(SKU.of("SKU-A"))
                     .quantity(10L).reservedQuantity(0L).status(InventoryStatus.ACTIVE).build();
             Inventory inv2 = Inventory.builder()
-                    .id(InventoryId.of(id2)).tenantId(tenantId).storeId(storeId)
+                    .id(InventoryId.of(id2)).merchantId(merchantId).storeId(storeId)
                     .productId(ProductId.of(UUID.randomUUID())).sku(SKU.of("SKU-B"))
                     .quantity(10L).reservedQuantity(0L).status(InventoryStatus.ACTIVE).build();
 
@@ -252,7 +252,7 @@ class InventoryPersistenceAdapterTest {
             UUID id1 = UUID.randomUUID();
 
             Inventory inv = Inventory.builder()
-                    .id(InventoryId.of(id1)).tenantId(tenantId).storeId(storeId)
+                    .id(InventoryId.of(id1)).merchantId(merchantId).storeId(storeId)
                     .productId(ProductId.of(UUID.randomUUID())).sku(SKU.of("SKU-A"))
                     .quantity(10L).reservedQuantity(0L).status(InventoryStatus.ACTIVE).build();
 
@@ -310,23 +310,23 @@ class InventoryPersistenceAdapterTest {
         @Test
         @DisplayName("stockIn unwraps all IDs and delegates to Spring Data repo")
         void shouldDelegateStockIn() {
-            when(springDataInventoryRepository.stockIn(inventoryUUID, tenantUUID, storeUUID, 50L)).thenReturn(1);
+            when(springDataInventoryRepository.stockIn(inventoryUUID, merchantUUID, storeUUID, 50L)).thenReturn(1);
 
-            int result = adapter.stockIn(inventoryId, tenantId, storeId, 50L);
+            int result = adapter.stockIn(inventoryId, merchantId, storeId, 50L);
 
             assertEquals(1, result);
-            verify(springDataInventoryRepository).stockIn(inventoryUUID, tenantUUID, storeUUID, 50L);
+            verify(springDataInventoryRepository).stockIn(inventoryUUID, merchantUUID, storeUUID, 50L);
         }
 
         @Test
         @DisplayName("stockOut unwraps all IDs and delegates to Spring Data repo")
         void shouldDelegateStockOut() {
-            when(springDataInventoryRepository.stockOut(inventoryUUID, tenantUUID, storeUUID, 50L)).thenReturn(1);
+            when(springDataInventoryRepository.stockOut(inventoryUUID, merchantUUID, storeUUID, 50L)).thenReturn(1);
 
-            int result = adapter.stockOut(inventoryId, tenantId, storeId, 50L);
+            int result = adapter.stockOut(inventoryId, merchantId, storeId, 50L);
 
             assertEquals(1, result);
-            verify(springDataInventoryRepository).stockOut(inventoryUUID, tenantUUID, storeUUID, 50L);
+            verify(springDataInventoryRepository).stockOut(inventoryUUID, merchantUUID, storeUUID, 50L);
         }
     }
 

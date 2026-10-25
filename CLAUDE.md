@@ -7,7 +7,7 @@ that publishes/consumes events or depends on another service.
 ## Owns
 
 Stock truth per (store, SKU): quantity, reservations for orders, and an audit trail of every stock change.
-Postgres DB `inventory`, schema `inventory`; tenant info from DynamoDB. Port **8058**.
+Postgres DB `inventory`, schema `inventory`; merchant info from DynamoDB. Port **8058**.
 Consumes `ProductCreated` (Kafka) and a reservation-expire tick (EventBridge → SQS, every minute).
 Publishes nothing yet (no outbox table).
 
@@ -60,12 +60,12 @@ Publishes nothing yet (no outbox table).
 ## Adding a use case — checklist
 
 1. **Domain**: rule in the aggregate method; throw a domain exception.
-2. **Port + command**: `application/usecase/<area>/XxxUseCase`, `application/command/XxxCmd` (carry `TenantId`, `StoreId`).
+2. **Port + command**: `application/usecase/<area>/XxxUseCase`, `application/command/XxxCmd` (carry `MerchantId`, `StoreId`).
 3. **Service**: `application/service/XxxService` with `@UseCase` + `@Transactional`. Stock changes through a guarded repository method (see invariants).
 4. **Audit**: write a `StockMovement` with the right `StockMovementType`, `reference_type` and `reference_id` for every quantity change.
 5. **Entry point**: REST controller or a consumer in `infrastructure/message`. Consumers map the external DTO to a command and must be **idempotent** (Kafka delivery is at-least-once).
 6. **Errors**: map in `InventoryExceptionHandler` (extends `oms-core` `GlobalExceptionHandler`).
-7. **Migration**: `src/main/resources/db/migration/V<next>__<what>.sql` (latest is `V2`); every table has `tenant_id`.
+7. **Migration**: `src/main/resources/db/migration/V<next>__<what>.sql` (latest is `V2`); every table has `merchant_id`.
 8. **Tests** mirroring the package: domain, service, adapter, controller/consumer.
 
 ## Tests
@@ -91,5 +91,5 @@ Infra from the `development` repo (Postgres, Kafka, LocalStack with SQS queue + 
 - **Reserve / confirm / expire do not write `StockMovement`** — only manual adjustment does, so the audit trail is incomplete.
 - **Kafka consumers have no dead-letter topic**: spring-kafka default = 10 attempts, no backoff, then the record is skipped. SQS `reservation-expire` has no DLQ.
 - `ReserveStock` and `ConfirmStockReservation` have no entry point; `OrderCreatedEventConsumer` is commented out; `ReleaseStockReservationUseCase` has no implementation.
-- REST endpoints take no `tenantId` (stores-service uses `/v1/store/tenants/{tenantId}/...`); `Inventory.validateTenantAndStore` exists but tenant scoping of the API is undecided.
+- REST endpoints take no `merchantId` (stores-service uses `/v1/store/merchants/{merchantId}/...`); `Inventory.validateMerchantAndStore` exists but merchant scoping of the API is undecided.
 - `ProductCreatedEvent` DTO duplicates the producer's class in stores-service — keep them in sync.

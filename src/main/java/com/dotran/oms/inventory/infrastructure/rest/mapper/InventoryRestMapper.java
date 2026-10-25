@@ -22,13 +22,13 @@ public abstract class InventoryRestMapper {
     @Autowired
     protected IdMapper idMapper;
 
-    @Mapping(target = "tenantId", expression = "java(idMapper.toTenantId(request.getTenantId()))")
+    @Mapping(target = "merchantId", expression = "java(idMapper.toMerchantId(request.getMerchantId()))")
     @Mapping(target = "storeId", expression = "java(idMapper.toStoreId(request.getStoreId()))")
     @Mapping(target = "productId", expression = "java(idMapper.toProductId(request.getProductId()))")
     @Mapping(target = "skus", expression = "java(idMapper.toSKUList(request.getSkus()))")
     public abstract CreateInventoryCmd toCreateInventoryCmd(CreateInventoryRequest request);
 
-    @Mapping(target = "tenantId", expression = "java(idMapper.toTenantId(request.getTenantId()))")
+    @Mapping(target = "merchantId", expression = "java(idMapper.toMerchantId(request.getMerchantId()))")
     @Mapping(target = "storeId", expression = "java(idMapper.toStoreId(request.getStoreId()))")
     @Mapping(target = "inventoryId", expression = "java(idMapper.toInventoryId(inventoryId))")
     @Mapping(target = "quantity", source = "request.quantity")

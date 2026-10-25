@@ -13,7 +13,7 @@ import com.dotran.oms.core.domain.id.InventoryId;
 import com.dotran.oms.core.domain.id.ProductId;
 import com.dotran.oms.core.domain.id.SKU;
 import com.dotran.oms.core.domain.id.StoreId;
-import com.dotran.oms.core.domain.id.TenantId;
+import com.dotran.oms.core.domain.id.MerchantId;
 import com.dotran.oms.core.exception.NotFoundException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -48,13 +48,13 @@ class GetStockMovementServiceTest {
     @InjectMocks
     private GetStockMovementService getStockMovementService;
 
-    private TenantId tenantId;
+    private MerchantId merchantId;
     private StoreId storeId;
     private InventoryId inventoryId;
 
     @BeforeEach
     void setUp() {
-        tenantId = TenantId.of(UUID.randomUUID());
+        merchantId = MerchantId.of(UUID.randomUUID());
         storeId = StoreId.of(UUID.randomUUID());
         inventoryId = InventoryId.of(UUID.randomUUID());
     }
@@ -62,7 +62,7 @@ class GetStockMovementServiceTest {
     private Inventory buildInventory() {
         return Inventory.builder()
                 .id(inventoryId)
-                .tenantId(tenantId)
+                .merchantId(merchantId)
                 .storeId(storeId)
                 .productId(ProductId.of(UUID.randomUUID()))
                 .sku(SKU.of("SKU-001"))
@@ -75,7 +75,7 @@ class GetStockMovementServiceTest {
     private StockMovement buildMovement(StockMovementType type, long quantity) {
         return StockMovement.builder()
                 .id(new StockMovementId(1L))
-                .tenantId(tenantId)
+                .merchantId(merchantId)
                 .storeId(storeId)
                 .inventoryId(inventoryId)
                 .type(type)

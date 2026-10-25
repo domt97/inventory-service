@@ -65,7 +65,7 @@ aws:
 
   dynamodb:
     table:
-      tenant-info: ${AWS_DYNAMODB_TABLE:localdev_tenant_info}
+      merchant-info: ${AWS_DYNAMODB_TABLE:localdev_merchant_info}
   sqs:
     queues:
       reservation-expire: ${AWS_SQS_RESERVATION_EXPIRE_QUEUE:localdev-reservation-expire-queue}

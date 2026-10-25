@@ -12,7 +12,7 @@ import java.util.UUID;
 public class StockMovementResponse {
 
     private Long id;
-    private UUID tenantId;
+    private UUID merchantId;
     private UUID storeId;
 
     private UUID inventoryId;

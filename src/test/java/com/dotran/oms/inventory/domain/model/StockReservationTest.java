@@ -7,7 +7,7 @@ import com.dotran.oms.core.domain.id.InventoryId;
 import com.dotran.oms.core.domain.id.OrderId;
 import com.dotran.oms.core.domain.id.OrderItemId;
 import com.dotran.oms.core.domain.id.StoreId;
-import com.dotran.oms.core.domain.id.TenantId;
+import com.dotran.oms.core.domain.id.MerchantId;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -23,7 +23,7 @@ class StockReservationTest {
     private StockReservation buildReservation(ReservationStatus status) {
         return StockReservation.builder()
                 .id(new StockReservationId(1L))
-                .tenantId(TenantId.of(UUID.randomUUID()))
+                .merchantId(MerchantId.of(UUID.randomUUID()))
                 .storeId(StoreId.of(UUID.randomUUID()))
                 .inventoryId(InventoryId.of(UUID.randomUUID()))
                 .orderId(OrderId.of(UUID.randomUUID()))
@@ -44,7 +44,7 @@ class StockReservationTest {
         @DisplayName("creates reservation with RESERVED status")
         void shouldCreateWithReservedStatus() {
             StockReservation reservation = StockReservation.reserve(
-                    TenantId.of(UUID.randomUUID()),
+                    MerchantId.of(UUID.randomUUID()),
                     StoreId.of(UUID.randomUUID()),
                     OrderId.of(UUID.randomUUID()),
                     OrderItemId.of(UUID.randomUUID()),
@@ -64,7 +64,7 @@ class StockReservationTest {
             Instant before = Instant.now();
 
             StockReservation reservation = StockReservation.reserve(
-                    TenantId.of(UUID.randomUUID()),
+                    MerchantId.of(UUID.randomUUID()),
                     StoreId.of(UUID.randomUUID()),
                     OrderId.of(UUID.randomUUID()),
                     OrderItemId.of(UUID.randomUUID()),

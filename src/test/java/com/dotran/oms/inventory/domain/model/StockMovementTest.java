@@ -6,7 +6,7 @@ import com.dotran.oms.core.domain.id.InventoryId;
 import com.dotran.oms.core.domain.id.ProductId;
 import com.dotran.oms.core.domain.id.SKU;
 import com.dotran.oms.core.domain.id.StoreId;
-import com.dotran.oms.core.domain.id.TenantId;
+import com.dotran.oms.core.domain.id.MerchantId;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -22,12 +22,12 @@ class StockMovementTest {
 
     @BeforeEach
     void setUp() {
-        TenantId tenantId = TenantId.of(UUID.randomUUID());
+        MerchantId merchantId = MerchantId.of(UUID.randomUUID());
         StoreId storeId = StoreId.of(UUID.randomUUID());
 
         inventory = Inventory.builder()
                 .id(InventoryId.of(UUID.randomUUID()))
-                .tenantId(tenantId)
+                .merchantId(merchantId)
                 .storeId(storeId)
                 .productId(ProductId.of(UUID.randomUUID()))
                 .sku(SKU.of("SKU-001"))
@@ -38,12 +38,12 @@ class StockMovementTest {
     }
 
     @Test
-    @DisplayName("newInstance copies tenant, store and inventory context from inventory")
+    @DisplayName("newInstance copies merchant, store and inventory context from inventory")
     void shouldCopyContextFromInventory() {
         StockMovement movement = StockMovement.newInstance(
                 inventory, StockMovementType.ADJUSTMENT_IN, 50L, "ORDER", null, "Test reason");
 
-        assertEquals(inventory.getTenantId(), movement.getTenantId());
+        assertEquals(inventory.getMerchantId(), movement.getMerchantId());
         assertEquals(inventory.getStoreId(), movement.getStoreId());
         assertEquals(inventory.getId(), movement.getInventoryId());
     }

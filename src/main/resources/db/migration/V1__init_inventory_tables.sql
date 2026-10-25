@@ -2,7 +2,7 @@ CREATE TABLE IF NOT EXISTS inventories
 (
     id                 UUID PRIMARY KEY,
 
-    tenant_id          UUID NOT NULL,
+    merchant_id        UUID NOT NULL,
     store_id           UUID NOT NULL,
 
     store_product_id   UUID NOT NULL,
@@ -41,7 +41,7 @@ CREATE TABLE IF NOT EXISTS stock_reservations
 (
     id              BIGINT PRIMARY KEY DEFAULT nextval('stock_reservations_seq'),
 
-    tenant_id       UUID NOT NULL,
+    merchant_id     UUID NOT NULL,
     store_id        UUID NOT NULL,
 
     inventory_id    UUID NOT NULL,
@@ -80,7 +80,7 @@ CREATE TABLE stock_movements
 (
     id              BIGINT PRIMARY KEY DEFAULT nextval('stock_movements_seq'),
 
-    tenant_id       UUID NOT NULL,
+    merchant_id     UUID NOT NULL,
     store_id        UUID NOT NULL,
 
     inventory_id    UUID NOT NULL,

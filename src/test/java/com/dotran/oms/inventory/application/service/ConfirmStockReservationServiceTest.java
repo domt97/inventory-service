@@ -13,7 +13,7 @@ import com.dotran.oms.core.domain.id.InventoryId;
 import com.dotran.oms.core.domain.id.OrderId;
 import com.dotran.oms.core.domain.id.OrderItemId;
 import com.dotran.oms.core.domain.id.StoreId;
-import com.dotran.oms.core.domain.id.TenantId;
+import com.dotran.oms.core.domain.id.MerchantId;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -49,14 +49,14 @@ class ConfirmStockReservationServiceTest {
     @InjectMocks
     private ConfirmStockReservationService confirmStockReservationService;
 
-    private TenantId tenantId;
+    private MerchantId merchantId;
     private StoreId storeId;
     private OrderId orderId;
     private InventoryId inventoryId;
 
     @BeforeEach
     void setUp() {
-        tenantId = TenantId.of(UUID.randomUUID());
+        merchantId = MerchantId.of(UUID.randomUUID());
         storeId = StoreId.of(UUID.randomUUID());
         orderId = OrderId.of(UUID.randomUUID());
         inventoryId = InventoryId.of(UUID.randomUUID());
@@ -65,7 +65,7 @@ class ConfirmStockReservationServiceTest {
     private StockReservation buildReservation(long id, InventoryId inventoryId, long quantity, ReservationStatus status) {
         return StockReservation.builder()
                 .id(new StockReservationId(id))
-                .tenantId(tenantId)
+                .merchantId(merchantId)
                 .storeId(storeId)
                 .inventoryId(inventoryId)
                 .orderId(orderId)
@@ -84,7 +84,7 @@ class ConfirmStockReservationServiceTest {
 
     private ConfirmStockReservationCmd buildCmd() {
         return ConfirmStockReservationCmd.builder()
-                .tenantId(tenantId)
+                .merchantId(merchantId)
                 .storeId(storeId)
                 .orderId(orderId)
                 .build();

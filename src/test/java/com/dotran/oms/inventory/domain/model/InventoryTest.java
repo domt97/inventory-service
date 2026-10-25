@@ -10,7 +10,7 @@ import com.dotran.oms.core.domain.id.InventoryId;
 import com.dotran.oms.core.domain.id.ProductId;
 import com.dotran.oms.core.domain.id.SKU;
 import com.dotran.oms.core.domain.id.StoreId;
-import com.dotran.oms.core.domain.id.TenantId;
+import com.dotran.oms.core.domain.id.MerchantId;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -23,24 +23,24 @@ import static org.junit.jupiter.api.Assertions.*;
 @DisplayName("Inventory Domain Model")
 class InventoryTest {
 
-    private static final UUID TENANT_UUID = UUID.randomUUID();
+    private static final UUID MERCHANT_UUID = UUID.randomUUID();
     private static final UUID STORE_UUID = UUID.randomUUID();
     private static final UUID PRODUCT_UUID = UUID.randomUUID();
     private static final UUID INVENTORY_UUID = UUID.randomUUID();
 
-    private TenantId tenantId;
+    private MerchantId merchantId;
     private StoreId storeId;
 
     @BeforeEach
     void setUp() {
-        tenantId = TenantId.of(TENANT_UUID);
+        merchantId = MerchantId.of(MERCHANT_UUID);
         storeId = StoreId.of(STORE_UUID);
     }
 
     private Inventory buildInventory(long quantity, long reservedQuantity) {
         return Inventory.builder()
                 .id(InventoryId.of(INVENTORY_UUID))
-                .tenantId(tenantId)
+                .merchantId(merchantId)
                 .storeId(storeId)
                 .productId(ProductId.of(PRODUCT_UUID))
                 .sku(SKU.of("SKU-001"))
@@ -254,25 +254,25 @@ class InventoryTest {
     }
 
     @Nested
-    @DisplayName("validateTenantAndStore()")
-    class ValidateTenantAndStore {
+    @DisplayName("validateMerchantAndStore()")
+    class ValidateMerchantAndStore {
 
         @Test
-        @DisplayName("does not throw when tenant and store match")
+        @DisplayName("does not throw when merchant and store match")
         void shouldNotThrowWhenValid() {
             Inventory inventory = buildInventory(100L, 0L);
 
-            assertDoesNotThrow(() -> inventory.validateTenantAndStore(tenantId, storeId));
+            assertDoesNotThrow(() -> inventory.validateMerchantAndStore(merchantId, storeId));
         }
 
         @Test
-        @DisplayName("throws ValidationException when tenantId does not match")
-        void shouldThrowWhenTenantMismatch() {
+        @DisplayName("throws ValidationException when merchantId does not match")
+        void shouldThrowWhenMerchantMismatch() {
             Inventory inventory = buildInventory(100L, 0L);
-            TenantId otherTenant = TenantId.of(UUID.randomUUID());
+            MerchantId otherMerchant = MerchantId.of(UUID.randomUUID());
 
             assertThrows(ValidationException.class,
-                    () -> inventory.validateTenantAndStore(otherTenant, storeId));
+                    () -> inventory.validateMerchantAndStore(otherMerchant, storeId));
         }
 
         @Test
@@ -282,7 +282,7 @@ class InventoryTest {
             StoreId otherStore = StoreId.of(UUID.randomUUID());
 
             assertThrows(ValidationException.class,
-                    () -> inventory.validateTenantAndStore(tenantId, otherStore));
+                    () -> inventory.validateMerchantAndStore(merchantId, otherStore));
         }
     }
 
@@ -294,7 +294,7 @@ class InventoryTest {
         @DisplayName("sets quantity and reservedQuantity to zero with ACTIVE status")
         void shouldInitializeWithDefaults() {
             Inventory inventory = Inventory.builder()
-                    .tenantId(tenantId)
+                    .merchantId(merchantId)
                     .storeId(storeId)
                     .productId(ProductId.of(PRODUCT_UUID))
                     .sku(SKU.of("SKU-NEW"))

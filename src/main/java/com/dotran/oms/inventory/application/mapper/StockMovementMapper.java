@@ -11,7 +11,7 @@ import java.util.List;
 public abstract class StockMovementMapper {
 
     @Mapping(target = "id", source = "id.value")
-    @Mapping(target = "tenantId", source = "tenantId.value")
+    @Mapping(target = "merchantId", source = "merchantId.value")
     @Mapping(target = "storeId", source = "storeId.value")
     @Mapping(target = "inventoryId", source = "inventoryId.value")
     @Mapping(target = "referenceId", source = "referenceId.value")

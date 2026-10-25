@@ -19,7 +19,7 @@ public abstract class InventoryPersistenceMapper {
     protected IdMapper idMapper;
 
     @Mapping(target = "id", expression = "java(idMapper.toInventoryId(entity.getId()))")
-    @Mapping(target = "tenantId", expression = "java(idMapper.toTenantId(entity.getTenantId()))")
+    @Mapping(target = "merchantId", expression = "java(idMapper.toMerchantId(entity.getMerchantId()))")
     @Mapping(target = "storeId", expression = "java(idMapper.toStoreId(entity.getStoreId()))")
     @Mapping(target = "productId", expression = "java(idMapper.toProductId(entity.getStoreProductId()))")
     @Mapping(target = "sku", expression = "java(idMapper.toSKU(entity.getSku()))")
@@ -27,7 +27,7 @@ public abstract class InventoryPersistenceMapper {
 
 
     @Mapping(target = "id", source = "id.value")
-    @Mapping(target = "tenantId", source = "tenantId.value")
+    @Mapping(target = "merchantId", source = "merchantId.value")
     @Mapping(target = "storeId", source = "storeId.value")
     @Mapping(target = "storeProductId", source = "productId.value")
     @Mapping(target = "sku", source = "sku.value")

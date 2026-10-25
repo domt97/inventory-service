@@ -38,8 +38,8 @@ public class StockMovementEntity {
     @EqualsAndHashCode.Include
     private Long id;
 
-    @Column(name = "tenant_id", nullable = false)
-    private UUID tenantId;
+    @Column(name = "merchant_id", nullable = false)
+    private UUID merchantId;
 
     @Column(name = "store_id", nullable = false)
     private UUID storeId;

@@ -9,7 +9,7 @@ import com.dotran.oms.core.domain.id.InventoryId;
 import com.dotran.oms.core.domain.id.ProductId;
 import com.dotran.oms.core.domain.id.SKU;
 import com.dotran.oms.core.domain.id.StoreId;
-import com.dotran.oms.core.domain.id.TenantId;
+import com.dotran.oms.core.domain.id.MerchantId;
 import com.dotran.oms.core.exception.NotFoundException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -42,14 +42,14 @@ class LoadInventoryServiceTest {
     @InjectMocks
     private LoadInventoryService loadInventoryService;
 
-    private TenantId tenantId;
+    private MerchantId merchantId;
     private StoreId storeId;
     private InventoryId inventoryId;
     private ProductId productId;
 
     @BeforeEach
     void setUp() {
-        tenantId = TenantId.of(UUID.randomUUID());
+        merchantId = MerchantId.of(UUID.randomUUID());
         storeId = StoreId.of(UUID.randomUUID());
         inventoryId = InventoryId.of(UUID.randomUUID());
         productId = ProductId.of(UUID.randomUUID());
@@ -58,7 +58,7 @@ class LoadInventoryServiceTest {
     private Inventory buildInventory(InventoryId id) {
         return Inventory.builder()
                 .id(id)
-                .tenantId(tenantId)
+                .merchantId(merchantId)
                 .storeId(storeId)
                 .productId(productId)
                 .sku(SKU.of("SKU-001"))

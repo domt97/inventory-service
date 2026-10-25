@@ -10,7 +10,7 @@ import com.dotran.oms.core.domain.id.InventoryId;
 import com.dotran.oms.core.domain.id.ProductId;
 import com.dotran.oms.core.domain.id.SKU;
 import com.dotran.oms.core.domain.id.StoreId;
-import com.dotran.oms.core.domain.id.TenantId;
+import com.dotran.oms.core.domain.id.MerchantId;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -42,13 +42,13 @@ class CreateInventoryServiceTest {
     @InjectMocks
     private CreateInventoryService createInventoryService;
 
-    private TenantId tenantId;
+    private MerchantId merchantId;
     private StoreId storeId;
     private ProductId productId;
 
     @BeforeEach
     void setUp() {
-        tenantId = TenantId.of(UUID.randomUUID());
+        merchantId = MerchantId.of(UUID.randomUUID());
         storeId = StoreId.of(UUID.randomUUID());
         productId = ProductId.of(UUID.randomUUID());
     }
@@ -60,7 +60,7 @@ class CreateInventoryServiceTest {
         SKU sku2 = SKU.of("SKU-002");
 
         CreateInventoryCmd cmd = CreateInventoryCmd.builder()
-                .tenantId(tenantId)
+                .merchantId(merchantId)
                 .storeId(storeId)
                 .productId(productId)
                 .skus(List.of(sku1, sku2))
@@ -84,7 +84,7 @@ class CreateInventoryServiceTest {
         SKU sku = SKU.of("SKU-001");
 
         CreateInventoryCmd cmd = CreateInventoryCmd.builder()
-                .tenantId(tenantId)
+                .merchantId(merchantId)
                 .storeId(storeId)
                 .productId(productId)
                 .skus(List.of(sku))
@@ -104,7 +104,7 @@ class CreateInventoryServiceTest {
         assertEquals(0L, inventory.getReservedQuantity());
         assertEquals(InventoryStatus.ACTIVE, inventory.getStatus());
         assertEquals(sku, inventory.getSku());
-        assertEquals(tenantId, inventory.getTenantId());
+        assertEquals(merchantId, inventory.getMerchantId());
         assertEquals(storeId, inventory.getStoreId());
     }
 
@@ -112,7 +112,7 @@ class CreateInventoryServiceTest {
     @DisplayName("returns empty list when no SKUs provided without touching repository")
     void shouldReturnEmptyWhenNoSkus() {
         CreateInventoryCmd cmd = CreateInventoryCmd.builder()
-                .tenantId(tenantId)
+                .merchantId(merchantId)
                 .storeId(storeId)
                 .productId(productId)
                 .skus(List.of())
@@ -132,7 +132,7 @@ class CreateInventoryServiceTest {
         SKU sku2 = SKU.of("SKU-002");
 
         CreateInventoryCmd cmd = CreateInventoryCmd.builder()
-                .tenantId(tenantId)
+                .merchantId(merchantId)
                 .storeId(storeId)
                 .productId(productId)
                 .skus(List.of(sku1, sku2))
@@ -161,7 +161,7 @@ class CreateInventoryServiceTest {
         SKU sku2 = SKU.of("SKU-002");
 
         CreateInventoryCmd cmd = CreateInventoryCmd.builder()
-                .tenantId(tenantId)
+                .merchantId(merchantId)
                 .storeId(storeId)
                 .productId(productId)
                 .skus(List.of(sku1, sku2))
@@ -185,7 +185,7 @@ class CreateInventoryServiceTest {
         ProductId differentProductId = ProductId.of(UUID.randomUUID());
 
         CreateInventoryCmd cmd = CreateInventoryCmd.builder()
-                .tenantId(tenantId)
+                .merchantId(merchantId)
                 .storeId(storeId)
                 .productId(productId)
                 .skus(List.of(sku))
@@ -193,7 +193,7 @@ class CreateInventoryServiceTest {
 
         Inventory mismatch = Inventory.builder()
                 .id(InventoryId.of(UUID.randomUUID()))
-                .tenantId(tenantId)
+                .merchantId(merchantId)
                 .storeId(storeId)
                 .productId(differentProductId)
                 .sku(sku)
@@ -215,7 +215,7 @@ class CreateInventoryServiceTest {
     private Inventory buildSavedInventory(SKU sku) {
         return Inventory.builder()
                 .id(InventoryId.of(UUID.randomUUID()))
-                .tenantId(tenantId)
+                .merchantId(merchantId)
                 .storeId(storeId)
                 .productId(productId)
                 .sku(sku)

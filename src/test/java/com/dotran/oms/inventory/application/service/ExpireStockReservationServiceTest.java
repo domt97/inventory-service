@@ -11,7 +11,7 @@ import com.dotran.oms.core.domain.id.InventoryId;
 import com.dotran.oms.core.domain.id.OrderId;
 import com.dotran.oms.core.domain.id.OrderItemId;
 import com.dotran.oms.core.domain.id.StoreId;
-import com.dotran.oms.core.domain.id.TenantId;
+import com.dotran.oms.core.domain.id.MerchantId;
 import com.dotran.oms.core.exception.NotFoundException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -65,7 +65,7 @@ class ExpireStockReservationServiceTest {
     private StockReservation buildReservation(long id, InventoryId inventoryId, Instant expiresAt) {
         return StockReservation.builder()
                 .id(new StockReservationId(id))
-                .tenantId(TenantId.of(UUID.randomUUID()))
+                .merchantId(MerchantId.of(UUID.randomUUID()))
                 .storeId(StoreId.of(UUID.randomUUID()))
                 .inventoryId(inventoryId)
                 .orderId(OrderId.of(UUID.randomUUID()))

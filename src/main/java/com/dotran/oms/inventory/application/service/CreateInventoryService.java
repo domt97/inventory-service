@@ -55,7 +55,7 @@ public class CreateInventoryService implements CreateInventoryUseCase {
             List<Inventory> toCreate = new ArrayList<>();
             for (SKU sku : newSkus) {
                 Inventory inventory = Inventory.builder()
-                        .tenantId(cmd.getTenantId())
+                        .merchantId(cmd.getMerchantId())
                         .storeId(cmd.getStoreId())
                         .productId(cmd.getProductId())
                         .sku(sku)

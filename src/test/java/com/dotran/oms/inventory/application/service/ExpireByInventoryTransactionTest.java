@@ -15,7 +15,7 @@ import com.dotran.oms.core.domain.id.OrderItemId;
 import com.dotran.oms.core.domain.id.ProductId;
 import com.dotran.oms.core.domain.id.SKU;
 import com.dotran.oms.core.domain.id.StoreId;
-import com.dotran.oms.core.domain.id.TenantId;
+import com.dotran.oms.core.domain.id.MerchantId;
 import com.dotran.oms.core.exception.NotFoundException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -52,13 +52,13 @@ class ExpireByInventoryTransactionTest {
     @InjectMocks
     private ExpireByInventoryTransaction expireByInventoryTransaction;
 
-    private TenantId tenantId;
+    private MerchantId merchantId;
     private StoreId storeId;
     private InventoryId inventoryId;
 
     @BeforeEach
     void setUp() {
-        tenantId = TenantId.of(UUID.randomUUID());
+        merchantId = MerchantId.of(UUID.randomUUID());
         storeId = StoreId.of(UUID.randomUUID());
         inventoryId = InventoryId.of(UUID.randomUUID());
     }
@@ -70,7 +70,7 @@ class ExpireByInventoryTransactionTest {
     private StockReservation buildReservation(long id, long quantity) {
         return StockReservation.builder()
                 .id(new StockReservationId(id))
-                .tenantId(tenantId)
+                .merchantId(merchantId)
                 .storeId(storeId)
                 .inventoryId(inventoryId)
                 .orderId(OrderId.of(UUID.randomUUID()))
@@ -86,7 +86,7 @@ class ExpireByInventoryTransactionTest {
     private Inventory buildInventory(long quantity, long reservedQuantity) {
         return Inventory.builder()
                 .id(inventoryId)
-                .tenantId(tenantId)
+                .merchantId(merchantId)
                 .storeId(storeId)
                 .productId(ProductId.of(UUID.randomUUID()))
                 .sku(SKU.of("SKU-001"))
@@ -186,7 +186,7 @@ class ExpireByInventoryTransactionTest {
     void shouldThrowWhenReservationInWrongState() {
         StockReservation alreadyExpired = StockReservation.builder()
                 .id(new StockReservationId(1L))
-                .tenantId(tenantId)
+                .merchantId(merchantId)
                 .storeId(storeId)
                 .inventoryId(inventoryId)
                 .orderId(OrderId.of(UUID.randomUUID()))
