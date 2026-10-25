@@ -11,7 +11,7 @@ import com.dotran.oms.core.domain.id.InventoryId;
 import com.dotran.oms.core.domain.id.ProductId;
 import com.dotran.oms.core.domain.id.SKU;
 import com.dotran.oms.core.domain.id.StoreId;
-import com.dotran.oms.core.domain.id.TenantId;
+import com.dotran.oms.core.domain.id.MerchantId;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.experimental.SuperBuilder;
@@ -23,7 +23,7 @@ import java.time.Instant;
 @EqualsAndHashCode(callSuper = true)
 public class Inventory extends BaseDomain<InventoryId> {
 
-    private TenantId tenantId;
+    private MerchantId merchantId;
     private StoreId storeId;
 
     private ProductId productId;
@@ -107,9 +107,9 @@ public class Inventory extends BaseDomain<InventoryId> {
         }
     }
 
-    public void validateTenantAndStore(TenantId tenantId, StoreId storeId) {
-        if (!this.tenantId.equals(tenantId) || !this.storeId.equals(storeId)) {
-            throw new ValidationException("Inventory does not belong to the specified tenant or store");
+    public void validateMerchantAndStore(MerchantId merchantId, StoreId storeId) {
+        if (!this.merchantId.equals(merchantId) || !this.storeId.equals(storeId)) {
+            throw new ValidationException("Inventory does not belong to the specified merchant or store");
         }
     }
 }

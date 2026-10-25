@@ -5,7 +5,7 @@ import com.dotran.oms.inventory.application.usecase.inventory.CreateInventoryUse
 import com.dotran.oms.inventory.infrastructure.message.dto.ProductCreatedEvent;
 import com.dotran.oms.core.domain.id.ProductId;
 import com.dotran.oms.core.domain.id.StoreId;
-import com.dotran.oms.core.domain.id.TenantId;
+import com.dotran.oms.core.domain.id.MerchantId;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -44,12 +44,12 @@ public class ProductCreatedConsumer {
             return;
         }
 
-        TenantId tenantId = TenantId.of(event.getTenantId());
+        MerchantId merchantId = MerchantId.of(event.getMerchantId());
         StoreId storeId = StoreId.of(event.getStoreId());
         ProductId productId = ProductId.of(event.getProductId());
 
         CreateInventoryCmd createInventoryCmd = CreateInventoryCmd.builder()
-                .tenantId(tenantId)
+                .merchantId(merchantId)
                 .storeId(storeId)
                 .productId(productId)
                 .skus(event.getSkus())

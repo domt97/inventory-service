@@ -11,7 +11,7 @@ import com.dotran.oms.core.domain.id.InventoryId;
 import com.dotran.oms.core.domain.id.OrderId;
 import com.dotran.oms.core.domain.id.OrderItemId;
 import com.dotran.oms.core.domain.id.StoreId;
-import com.dotran.oms.core.domain.id.TenantId;
+import com.dotran.oms.core.domain.id.MerchantId;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -47,14 +47,14 @@ class StockReservationRepositoryAdapterTest {
     @InjectMocks
     private StockReservationRepositoryAdapter adapter;
 
-    private TenantId tenantId;
+    private MerchantId merchantId;
     private StoreId storeId;
     private InventoryId inventoryId;
     private OrderId orderId;
 
     @BeforeEach
     void setUp() {
-        tenantId = TenantId.of(UUID.randomUUID());
+        merchantId = MerchantId.of(UUID.randomUUID());
         storeId = StoreId.of(UUID.randomUUID());
         inventoryId = InventoryId.of(UUID.randomUUID());
         orderId = OrderId.of(UUID.randomUUID());
@@ -63,7 +63,7 @@ class StockReservationRepositoryAdapterTest {
     private StockReservation buildReservation(long id) {
         return StockReservation.builder()
                 .id(new StockReservationId(id))
-                .tenantId(tenantId)
+                .merchantId(merchantId)
                 .storeId(storeId)
                 .inventoryId(inventoryId)
                 .orderId(orderId)

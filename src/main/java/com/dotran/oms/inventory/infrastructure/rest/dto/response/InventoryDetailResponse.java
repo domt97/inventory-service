@@ -15,7 +15,7 @@ public class InventoryDetailResponse {
 
     private UUID productId;
     private String sku;
-    private UUID tenantId;
+    private UUID merchantId;
     private UUID storeId;
     private int quantity;
     private int reservedQuantity;

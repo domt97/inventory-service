@@ -83,7 +83,7 @@ public class ReserveStockService implements ReserveStockUseCase {
             }
 
             StockReservation stockReservation = StockReservation.reserve(
-                    reserveStockCmd.getTenantId(),
+                    reserveStockCmd.getMerchantId(),
                     reserveStockCmd.getStoreId(),
                     reserveStockCmd.getOrderId(),
                     reserveStockSKU.getOrderItemId(),

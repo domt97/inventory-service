@@ -60,11 +60,11 @@ public interface SpringDataInventoryRepository extends JpaRepository<InventoryEn
             quantity   = quantity + :quantity,
             updated_at = CURRENT_TIMESTAMP
         WHERE id      = :inventoryId
-          AND tenant_id = :tenantId
+          AND merchant_id = :merchantId
           AND store_id  = :storeId
         """, nativeQuery = true)
     int stockIn(@Param("inventoryId") UUID inventoryId,
-                @Param("tenantId") UUID tenantId,
+                @Param("merchantId") UUID merchantId,
                 @Param("storeId") UUID storeId,
                 @Param("quantity") long quantity);
 
@@ -75,12 +75,12 @@ public interface SpringDataInventoryRepository extends JpaRepository<InventoryEn
             quantity   = quantity - :quantity,
             updated_at = CURRENT_TIMESTAMP
         WHERE id      = :inventoryId
-          AND tenant_id = :tenantId
+          AND merchant_id = :merchantId
           AND store_id  = :storeId
           AND (quantity - reserved_quantity) >= :quantity
         """, nativeQuery = true)
     int stockOut(@Param("inventoryId") UUID inventoryId,
-                 @Param("tenantId") UUID tenantId,
+                 @Param("merchantId") UUID merchantId,
                  @Param("storeId") UUID storeId,
                  @Param("quantity") long quantity);
 }

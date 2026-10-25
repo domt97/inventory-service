@@ -17,7 +17,7 @@ import java.util.UUID;
 public class AdjustStockRequest {
 
     @NotNull
-    private UUID tenantId;
+    private UUID merchantId;
 
     @NotNull
     private UUID storeId;

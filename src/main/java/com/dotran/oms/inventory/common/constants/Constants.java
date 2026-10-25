@@ -6,7 +6,7 @@ import lombok.experimental.UtilityClass;
 public class Constants {
 
     // Resource
-    public static final String TENANT = "Tenant";
+    public static final String MERCHANT = "Merchant";
     public static final String STORE = "Store";
     public static final String PRODUCT = "Product";
 

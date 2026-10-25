@@ -5,7 +5,7 @@ import com.dotran.oms.core.domain.id.InventoryId;
 import com.dotran.oms.core.domain.id.ProductId;
 import com.dotran.oms.core.domain.id.SKU;
 import com.dotran.oms.core.domain.id.StoreId;
-import com.dotran.oms.core.domain.id.TenantId;
+import com.dotran.oms.core.domain.id.MerchantId;
 
 import java.util.Collection;
 import java.util.List;
@@ -35,8 +35,8 @@ public interface InventoryRepository {
 
     int release(InventoryId inventoryId, Long quantity);
 
-    int stockIn(InventoryId inventoryId, TenantId tenantId, StoreId storeId, Long quantity);
+    int stockIn(InventoryId inventoryId, MerchantId merchantId, StoreId storeId, Long quantity);
 
-    int stockOut(InventoryId inventoryId, TenantId tenantId, StoreId storeId, Long quantity);
+    int stockOut(InventoryId inventoryId, MerchantId merchantId, StoreId storeId, Long quantity);
 
 }

@@ -2,7 +2,7 @@ package com.dotran.oms.inventory.application.command;
 
 import com.dotran.oms.core.domain.id.OrderId;
 import com.dotran.oms.core.domain.id.StoreId;
-import com.dotran.oms.core.domain.id.TenantId;
+import com.dotran.oms.core.domain.id.MerchantId;
 import lombok.Builder;
 import lombok.Data;
 
@@ -10,7 +10,7 @@ import lombok.Data;
 @Builder
 public class ConfirmStockReservationCmd {
 
-    private TenantId tenantId;
+    private MerchantId merchantId;
     private StoreId storeId;
 
     private OrderId orderId;
