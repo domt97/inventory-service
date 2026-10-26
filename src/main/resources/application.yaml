@@ -63,9 +63,6 @@ aws:
   access-key: ${AWS_ACCESS_KEY:test}
   secret-key: ${AWS_SECRET_KEY:test}
 
-  dynamodb:
-    table:
-      merchant-info: ${AWS_DYNAMODB_TABLE:localdev_merchant_info}
   sqs:
     queues:
       reservation-expire: ${AWS_SQS_RESERVATION_EXPIRE_QUEUE:localdev-reservation-expire-queue}

@@ -5,14 +5,12 @@ import com.dotran.oms.inventory.application.dto.InventoryDetailDto;
 import com.dotran.oms.inventory.application.mapper.InventoryMapper;
 import com.dotran.oms.inventory.application.repository.InventoryRepository;
 import com.dotran.oms.inventory.application.repository.StockMovementRepository;
-import com.dotran.oms.inventory.application.repository.MerchantRepository;
 import com.dotran.oms.inventory.common.id.StockMovementId;
 import com.dotran.oms.inventory.domain.enums.InventoryStatus;
 import com.dotran.oms.inventory.domain.enums.StockMovementType;
 import com.dotran.oms.inventory.domain.exception.InsufficientStockException;
 import com.dotran.oms.inventory.domain.model.Inventory;
 import com.dotran.oms.inventory.domain.model.StockMovement;
-import com.dotran.oms.core.domain.MerchantInfo;
 import com.dotran.oms.core.domain.id.InventoryId;
 import com.dotran.oms.core.domain.id.ProductId;
 import com.dotran.oms.core.domain.id.SKU;
@@ -44,9 +42,6 @@ class AdjustStockServiceTest {
 
     @Mock
     private StockMovementRepository stockMovementRepository;
-
-    @Mock
-    private MerchantRepository merchantRepository;
 
     @Mock
     private InventoryMapper inventoryMapper;
@@ -106,7 +101,6 @@ class AdjustStockServiceTest {
         Inventory inventory = buildInventory(100L, 20L);
         AdjustStockCmd cmd = buildCmd(StockMovementType.ADJUSTMENT_IN, 50L);
 
-        when(merchantRepository.findByMerchantId(merchantId)).thenReturn(Optional.of(mock(MerchantInfo.class)));
         when(repository.getById(inventoryId)).thenReturn(Optional.of(inventory));
         when(repository.stockIn(inventoryId, merchantId, storeId, 50L)).thenReturn(1);
         when(stockMovementRepository.create(any(StockMovement.class))).thenReturn(buildSavedMovement());
@@ -124,7 +118,6 @@ class AdjustStockServiceTest {
         Inventory inventory = buildInventory(100L, 20L); // available = 80
         AdjustStockCmd cmd = buildCmd(StockMovementType.ADJUSTMENT_OUT, 50L);
 
-        when(merchantRepository.findByMerchantId(merchantId)).thenReturn(Optional.of(mock(MerchantInfo.class)));
         when(repository.getById(inventoryId)).thenReturn(Optional.of(inventory));
         when(repository.stockOut(inventoryId, merchantId, storeId, 50L)).thenReturn(1);
         when(stockMovementRepository.create(any(StockMovement.class))).thenReturn(buildSavedMovement());
@@ -137,14 +130,24 @@ class AdjustStockServiceTest {
     }
 
     @Test
-    @DisplayName("throws NotFoundException when merchant does not exist")
-    void shouldThrowWhenMerchantNotFound() {
-        AdjustStockCmd cmd = buildCmd(StockMovementType.ADJUSTMENT_IN, 10L);
+    @DisplayName("unknown merchant on an existing inventory → ValidationException, no stock change, no movement")
+    void shouldRejectUnknownMerchant() {
+        MerchantId otherMerchant = MerchantId.of(UUID.randomUUID());
+        AdjustStockCmd cmd = AdjustStockCmd.builder()
+                .merchantId(otherMerchant)
+                .storeId(storeId)
+                .inventoryId(inventoryId)
+                .movementType(StockMovementType.ADJUSTMENT_IN)
+                .quantity(10L)
+                .reason("Test adjustment")
+                .build();
 
-        when(merchantRepository.findByMerchantId(merchantId)).thenReturn(Optional.empty());
+        when(repository.getById(inventoryId)).thenReturn(Optional.of(buildInventory(100L, 0L)));
 
-        assertThrows(NotFoundException.class, () -> adjustStockService.adjust(cmd));
-        verifyNoInteractions(repository);
+        assertThrows(ValidationException.class, () -> adjustStockService.adjust(cmd));
+        verify(repository, never()).stockIn(any(), any(), any(), anyLong());
+        verify(repository, never()).stockOut(any(), any(), any(), anyLong());
+        verifyNoInteractions(stockMovementRepository);
     }
 
     @Test
@@ -152,7 +155,6 @@ class AdjustStockServiceTest {
     void shouldThrowWhenInventoryNotFound() {
         AdjustStockCmd cmd = buildCmd(StockMovementType.ADJUSTMENT_IN, 10L);
 
-        when(merchantRepository.findByMerchantId(merchantId)).thenReturn(Optional.of(mock(MerchantInfo.class)));
         when(repository.getById(inventoryId)).thenReturn(Optional.empty());
 
         assertThrows(NotFoundException.class, () -> adjustStockService.adjust(cmd));
@@ -164,7 +166,6 @@ class AdjustStockServiceTest {
         Inventory inventory = buildInventory(100L, 90L); // available = 10
         AdjustStockCmd cmd = buildCmd(StockMovementType.ADJUSTMENT_OUT, 50L);
 
-        when(merchantRepository.findByMerchantId(merchantId)).thenReturn(Optional.of(mock(MerchantInfo.class)));
         when(repository.getById(inventoryId)).thenReturn(Optional.of(inventory));
 
         assertThrows(InsufficientStockException.class, () -> adjustStockService.adjust(cmd));
@@ -176,7 +177,6 @@ class AdjustStockServiceTest {
     void shouldCreateStockMovementAfterAdjust() {
         Inventory inventory = buildInventory(100L, 0L);
         AdjustStockCmd cmd = buildCmd(StockMovementType.ADJUSTMENT_IN, 50L);
-        when(merchantRepository.findByMerchantId(merchantId)).thenReturn(Optional.of(mock(MerchantInfo.class)));
         when(repository.getById(inventoryId)).thenReturn(Optional.of(inventory));
         when(repository.stockIn(inventoryId, merchantId, storeId, 50L)).thenReturn(1);
         when(stockMovementRepository.create(any(StockMovement.class))).thenReturn(buildSavedMovement());
@@ -193,7 +193,6 @@ class AdjustStockServiceTest {
         Inventory inventory = buildInventory(100L, 0L);
         AdjustStockCmd cmd = buildCmd(StockMovementType.ADJUSTMENT_IN, 50L);
 
-        when(merchantRepository.findByMerchantId(merchantId)).thenReturn(Optional.of(mock(MerchantInfo.class)));
         when(repository.getById(inventoryId)).thenReturn(Optional.of(inventory));
         when(repository.stockIn(inventoryId, merchantId, storeId, 50L)).thenReturn(1);
         when(stockMovementRepository.create(any())).thenReturn(buildSavedMovement());
@@ -221,7 +220,6 @@ class AdjustStockServiceTest {
 
         AdjustStockCmd cmd = buildCmd(StockMovementType.ADJUSTMENT_IN, 10L);
 
-        when(merchantRepository.findByMerchantId(merchantId)).thenReturn(Optional.of(mock(MerchantInfo.class)));
         when(repository.getById(inventoryId)).thenReturn(Optional.of(inventory));
 
         assertThrows(ValidationException.class, () -> adjustStockService.adjust(cmd));
@@ -234,7 +232,6 @@ class AdjustStockServiceTest {
         Inventory inventory = buildInventory(100L, 0L);
         AdjustStockCmd cmd = buildCmd(StockMovementType.ADJUSTMENT_IN, 50L);
 
-        when(merchantRepository.findByMerchantId(merchantId)).thenReturn(Optional.of(mock(MerchantInfo.class)));
         when(repository.getById(inventoryId)).thenReturn(Optional.of(inventory));
         when(repository.stockIn(inventoryId, merchantId, storeId, 50L)).thenReturn(0);
 
@@ -248,7 +245,6 @@ class AdjustStockServiceTest {
         Inventory inventory = buildInventory(100L, 20L); // available=80, domain passes
         AdjustStockCmd cmd = buildCmd(StockMovementType.ADJUSTMENT_OUT, 50L);
 
-        when(merchantRepository.findByMerchantId(merchantId)).thenReturn(Optional.of(mock(MerchantInfo.class)));
         when(repository.getById(inventoryId)).thenReturn(Optional.of(inventory));
         when(repository.stockOut(inventoryId, merchantId, storeId, 50L)).thenReturn(0);
 

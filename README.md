@@ -92,7 +92,7 @@ Shipment              (logistics concern — does not affect inventory)
 │  ┌──────────────────────────────▼────────────────────────────┐  │
 │  │  Port Interfaces (Repository contracts)                   │  │
 │  │  InventoryRepository  │  StockReservationRepository       │  │
-│  │  StockMovementRepository  │  MerchantRepository           │  │
+│  │  StockMovementRepository                                  │  │
 │  └───────────────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────────┘
                                  │
@@ -184,7 +184,6 @@ Each inventory's expiry runs in an isolated `REQUIRES_NEW` transaction — a fai
 | Database | PostgreSQL 16 |
 | Migrations | Flyway |
 | Messaging | Apache Kafka, AWS SQS (Spring Cloud AWS) |
-| NoSQL | AWS DynamoDB (merchant metadata) |
 | Mapping | MapStruct 1.6.3 |
 | Boilerplate | Lombok |
 | API Docs | SpringDoc OpenAPI 3.0 (Swagger UI) |
@@ -219,8 +218,7 @@ src/main/java/com/dotran/oms/inventory/
 │   ├── repository/                  # Outbound port interfaces
 │   │   ├── InventoryRepository.java
 │   │   ├── StockReservationRepository.java
-│   │   ├── StockMovementRepository.java
-│   │   └── MerchantRepository.java
+│   │   └── StockMovementRepository.java
 │   ├── service/                     # Use case implementations (@UseCase)
 │   │   ├── ReserveStockService.java
 │   │   ├── ConfirmStockReservationService.java
@@ -306,26 +304,16 @@ created_at
 
 ## Getting Started
 
-> **Tenant → merchant rename (2026-10).** The old `tenant` concept is now `merchant`: column `merchant_id`,
-> `MerchantId`, DynamoDB table `<profile>_merchant_info`, request/response field `merchantId` (was `tenantId`) and the `ProductCreated` field `merchantId`.
-> Rollout on every machine, in this order:
->    1. Stop **both** services and delete the Debezium connector: `curl -X DELETE http://localhost:9084/connectors/postgres-cdc`.
->    2. Drop and recreate the `store` and `inventory` databases (Flyway would otherwise fail with a checksum mismatch: the original migrations were edited in place).
->    3. Kafka: **delete the topic `ProductCreated` and the consumer group `product-consumer`**, or keep both and reset the group's offsets to latest. Commands (Kafka runs in the `kafka` container):
->       - delete: `docker exec kafka kafka-topics --bootstrap-server localhost:9092 --delete --topic ProductCreated` and `docker exec kafka kafka-consumer-groups --bootstrap-server localhost:9092 --delete --group product-consumer`
->       - or reset: `docker exec kafka kafka-consumer-groups --bootstrap-server localhost:9092 --group product-consumer --reset-offsets --to-latest --topic ProductCreated --execute`
->       Never delete the group alone: with `auto-offset-reset: earliest` it would replay every old message.
->    4. Recreate the DynamoDB table `localdev_merchant_info` with its items (`./localstack/localstack.sh`).
->    5. Start stores-service (Flyway creates `outbox_events`), register the Debezium connector, then start inventory-service.
->    6. Smoke test: create a product and check that an inventory row with `merchant_id` appears.
->
->    If step 3 is missed, each old message logs 10 ERRORs (null `merchantId` violates `NOT NULL`) and is skipped; nothing is written.
+> **No DynamoDB any more (2026-10).** inventory-service no longer looks merchants up: the merchant id comes with
+> `ProductCreated` and is stored on every inventory row; merchants themselves live in stores-service (Postgres).
+> Nothing to migrate here. If you recreate the `store` database for the stores-service change, recreate `inventory`
+> too so no inventory rows point to stores that no longer exist (see the stores-service README).
 
 ### Prerequisites
 
 - Java 17+
 - PostgreSQL 12+
-- LocalStack (for local AWS SQS/DynamoDB)
+- LocalStack (for local AWS SQS/S3)
 - Kafka
 
 ### Database Setup
@@ -345,14 +333,6 @@ cd ../development/docker && docker compose up -d localstack   # LocalStack runs 
 
 # Create SQS queue
 awslocal sqs create-queue --queue-name localdev-reservation-expire-queue
-
-# Create DynamoDB table
-# (or run ./localstack/localstack.sh, which also inserts a sample merchant)
-awslocal dynamodb create-table \
-  --table-name localdev_merchant_info \
-  --attribute-definitions AttributeName=pk,AttributeType=S \
-  --key-schema AttributeName=pk,KeyType=HASH \
-  --billing-mode PAY_PER_REQUEST
 ```
 
 ### Run
@@ -406,9 +386,6 @@ spring:
 
 aws:
   region: eu-west-1
-  dynamodb:
-    table:
-      merchant-info: localdev_merchant_info
   sqs:
     queues:
       reservation-expire: localdev-reservation-expire-queue
@@ -424,5 +401,5 @@ All AWS credentials and endpoints support environment variable overrides:
 
 ```
 AWS_REGION, AWS_ENDPOINT, AWS_ACCESS_KEY, AWS_SECRET_KEY
-AWS_DYNAMODB_TABLE, AWS_SQS_RESERVATION_EXPIRE_QUEUE
+AWS_SQS_RESERVATION_EXPIRE_QUEUE
 ```
