@@ -7,7 +7,7 @@ that publishes/consumes events or depends on another service.
 ## Owns
 
 Stock truth per (store, SKU): quantity, reservations for orders, and an audit trail of every stock change.
-Postgres DB `inventory`, schema `inventory`; merchant info from DynamoDB. Port **8058**.
+Postgres DB `inventory`, schema `inventory`; no DynamoDB (merchant id arrives with `ProductCreated`). Port **8058**.
 Consumes `ProductCreated` (Kafka) and a reservation-expire tick (EventBridge → SQS, every minute).
 Publishes nothing yet (no outbox table).
 
