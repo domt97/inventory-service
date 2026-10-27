@@ -13,5 +13,6 @@ public abstract class InventoryMapper {
     @Mapping(target = "storeId", source = "storeId.value")
     @Mapping(target = "productId", source = "productId.value")
     @Mapping(target = "sku", source = "sku.value")
+    @Mapping(target = "availableQuantity", expression = "java(inventory.availableQuantity())")
     public abstract InventoryDetailDto toDetailDto(Inventory inventory);
 }
