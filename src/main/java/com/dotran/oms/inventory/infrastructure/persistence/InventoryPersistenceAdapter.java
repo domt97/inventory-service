@@ -1,6 +1,7 @@
 package com.dotran.oms.inventory.infrastructure.persistence;
 
 import com.dotran.oms.inventory.application.repository.InventoryRepository;
+import com.dotran.oms.inventory.domain.enums.InventoryStatus;
 import com.dotran.oms.inventory.domain.model.Inventory;
 import com.dotran.oms.inventory.infrastructure.mapper.InventoryPersistenceMapper;
 import com.dotran.oms.inventory.infrastructure.persistence.entity.InventoryEntity;
@@ -166,4 +167,17 @@ public class InventoryPersistenceAdapter implements InventoryRepository {
         return springDataInventoryRepository.stockOut(inventoryId.getValue(), merchantId.getValue(), storeId.getValue(), quantity);
     }
 
+    @Override
+    public int insertIfAbsent(Inventory inventory) {
+        return springDataInventoryRepository.insertIfAbsent(inventory.getId().getValue(), inventory.getMerchantId().getValue(),
+                inventory.getStoreId().getValue(), inventory.getProductId().getValue(), inventory.getSku().getValue(),
+                inventory.getStatus().name());
+    }
+
+    @Override
+    public int updateStatus(InventoryId inventoryId, MerchantId merchantId, StoreId storeId, ProductId productId,
+                            InventoryStatus status) {
+        return springDataInventoryRepository.updateStatus(inventoryId.getValue(), merchantId.getValue(), storeId.getValue(),
+                productId.getValue(), status.name());
+    }
 }

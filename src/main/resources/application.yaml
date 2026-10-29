@@ -68,6 +68,9 @@ aws:
       reservation-expire: ${AWS_SQS_RESERVATION_EXPIRE_QUEUE:localdev-reservation-expire-queue}
 
 app:
+  kafka:
+    # Replication factor of the dead-letter topics (ProductCreated.DLT, ProductUpdated.DLT); 3 in production.
+    dlt-replicas: ${KAFKA_DLT_REPLICAS:1}
   reservation-expiry:
     # Reservations expired per page of the sweep.
     batch-size: ${RESERVATION_EXPIRY_BATCH_SIZE:500}

@@ -359,4 +359,29 @@ class InventoryPersistenceAdapterTest {
             assertTrue(result.isEmpty());
         }
     }
+
+    @Test
+    @DisplayName("insertIfAbsent passes the row's ids, SKU code and status name and returns the row count")
+    void insertIfAbsent_delegates() {
+        Inventory inventory = Inventory.forCatalogSku(
+                MerchantId.newMerchantId(), StoreId.newStoreId(), ProductId.newProductId(), SKU.of("SKU-1"),
+                InventoryStatus.INACTIVE);
+        when(springDataInventoryRepository.insertIfAbsent(inventory.getId().getValue(), inventory.getMerchantId().getValue(),
+                inventory.getStoreId().getValue(), inventory.getProductId().getValue(), "SKU-1", "INACTIVE")).thenReturn(0);
+
+        assertEquals(0, adapter.insertIfAbsent(inventory));
+    }
+
+    @Test
+    @DisplayName("updateStatus passes the guard columns and the status name and returns the row count")
+    void updateStatus_delegates() {
+        InventoryId id = InventoryId.newInventoryId();
+        MerchantId merchantId = MerchantId.newMerchantId();
+        StoreId storeId = StoreId.newStoreId();
+        ProductId productId = ProductId.newProductId();
+        when(springDataInventoryRepository.updateStatus(id.getValue(), merchantId.getValue(), storeId.getValue(),
+                productId.getValue(), "ACTIVE")).thenReturn(1);
+
+        assertEquals(1, adapter.updateStatus(id, merchantId, storeId, productId, InventoryStatus.ACTIVE));
+    }
 }

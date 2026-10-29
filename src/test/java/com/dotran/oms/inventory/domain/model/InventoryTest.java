@@ -18,6 +18,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.*;
 
 @DisplayName("Inventory Domain Model")
@@ -308,5 +309,19 @@ class InventoryTest {
             assertNotNull(inventory.getCreatedAt());
             assertNotNull(inventory.getUpdatedAt());
         }
+    }
+
+    @Test
+    @DisplayName("forCatalogSku creates a row with no stock, a new id and the given status")
+    void forCatalogSku_createsRowWithoutStock() {
+        Inventory inventory = Inventory.forCatalogSku(
+                MerchantId.newMerchantId(), StoreId.newStoreId(),
+                ProductId.newProductId(), SKU.of("SKU-1"),
+                InventoryStatus.INACTIVE);
+
+        assertThat(inventory.getId()).isNotNull();
+        assertThat(inventory.getQuantity()).isZero();
+        assertThat(inventory.getReservedQuantity()).isZero();
+        assertThat(inventory.getStatus()).isEqualTo(InventoryStatus.INACTIVE);
     }
 }

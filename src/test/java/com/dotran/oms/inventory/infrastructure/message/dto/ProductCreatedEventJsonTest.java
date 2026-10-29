@@ -48,4 +48,18 @@ class ProductCreatedEventJsonTest {
 
         assertThat(event.getMerchantId()).isNull();
     }
+
+    @Test
+    @DisplayName("reads the optional version; a payload without it has a null version (treated as 0)")
+    void readsOptionalVersion() throws Exception {
+        String base = """
+                {"eventId":"%s","eventType":"ProductCreated","occurredAt":"2026-10-25T10:00:00Z",
+                 "merchantId":"%s","storeId":"%s","productId":"%s","skus":[{"value":"SKU-1"}]%s}
+                """;
+        String withVersion = base.formatted(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), ",\"version\":0");
+        String withoutVersion = base.formatted(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), "");
+
+        assertThat(objectMapper.readValue(withVersion, ProductCreatedEvent.class).getVersion()).isZero();
+        assertThat(objectMapper.readValue(withoutVersion, ProductCreatedEvent.class).getVersion()).isNull();
+    }
 }
