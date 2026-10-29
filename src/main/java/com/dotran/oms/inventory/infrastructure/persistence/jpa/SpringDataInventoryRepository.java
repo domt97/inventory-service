@@ -83,4 +83,38 @@ public interface SpringDataInventoryRepository extends JpaRepository<InventoryEn
                  @Param("merchantId") UUID merchantId,
                  @Param("storeId") UUID storeId,
                  @Param("quantity") long quantity);
+
+    /** Catalog sync: creates a row with no stock unless (store_id, sku) exists. 1 = inserted, 0 = already there. */
+    @Modifying
+    @Query(value = """
+        INSERT INTO inventories (id, merchant_id, store_id, store_product_id, sku,
+                                 quantity, reserved_quantity, status, created_at, updated_at)
+        VALUES (:id, :merchantId, :storeId, :productId, :sku, 0, 0, :status, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        ON CONFLICT (store_id, sku) DO NOTHING
+        """, nativeQuery = true)
+    int insertIfAbsent(@Param("id") UUID id,
+                       @Param("merchantId") UUID merchantId,
+                       @Param("storeId") UUID storeId,
+                       @Param("productId") UUID productId,
+                       @Param("sku") String sku,
+                       @Param("status") String status);
+
+    /** Catalog sync: guarded status change of one row of the product; 0 if it already has the status. */
+    @Modifying
+    @Query(value = """
+        UPDATE inventories
+        SET
+            status     = :status,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id               = :inventoryId
+          AND merchant_id      = :merchantId
+          AND store_id         = :storeId
+          AND store_product_id = :productId
+          AND status          <> :status
+        """, nativeQuery = true)
+    int updateStatus(@Param("inventoryId") UUID inventoryId,
+                     @Param("merchantId") UUID merchantId,
+                     @Param("storeId") UUID storeId,
+                     @Param("productId") UUID productId,
+                     @Param("status") String status);
 }

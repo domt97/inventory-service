@@ -44,6 +44,24 @@ public class Inventory extends BaseDomain<InventoryId> {
         this.createdAt = this.updatedAt = Instant.now();
     }
 
+    /** A new inventory row created from the catalog (ProductCreated / ProductUpdated): no stock, status from the catalog. */
+    public static Inventory forCatalogSku(MerchantId merchantId, StoreId storeId, ProductId productId, SKU sku,
+                                          InventoryStatus status) {
+        Instant now = Instant.now();
+        return Inventory.builder()
+                .id(InventoryId.newInventoryId())
+                .merchantId(merchantId)
+                .storeId(storeId)
+                .productId(productId)
+                .sku(sku)
+                .quantity(0L)
+                .reservedQuantity(0L)
+                .status(status)
+                .createdAt(now)
+                .updatedAt(now)
+                .build();
+    }
+
     public long availableQuantity() {
         return quantity - reservedQuantity;
     }

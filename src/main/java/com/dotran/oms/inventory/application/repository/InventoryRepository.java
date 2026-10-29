@@ -1,5 +1,6 @@
 package com.dotran.oms.inventory.application.repository;
 
+import com.dotran.oms.inventory.domain.enums.InventoryStatus;
 import com.dotran.oms.inventory.domain.model.Inventory;
 import com.dotran.oms.core.domain.id.InventoryId;
 import com.dotran.oms.core.domain.id.ProductId;
@@ -38,5 +39,12 @@ public interface InventoryRepository {
     int stockIn(InventoryId inventoryId, MerchantId merchantId, StoreId storeId, Long quantity);
 
     int stockOut(InventoryId inventoryId, MerchantId merchantId, StoreId storeId, Long quantity);
+
+    /** Inserts the row unless (store, sku) already exists. Returns 1 if inserted, 0 otherwise. */
+    int insertIfAbsent(Inventory inventory);
+
+    /** Guarded status change of one row of the product; returns 0 if the row already has that status. */
+    int updateStatus(InventoryId inventoryId, MerchantId merchantId, StoreId storeId, ProductId productId,
+                     InventoryStatus status);
 
 }
