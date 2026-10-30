@@ -8,7 +8,7 @@ import com.dotran.oms.inventory.infrastructure.persistence.entity.StockMovementE
 import com.dotran.oms.inventory.infrastructure.persistence.jpa.SpringDataStockMovementRepository;
 import com.dotran.oms.core.domain.id.InventoryId;
 import com.dotran.oms.core.domain.id.StoreId;
-import com.dotran.oms.core.domain.id.TenantId;
+import com.dotran.oms.core.domain.id.MerchantId;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -39,21 +39,21 @@ class StockMovementRepositoryAdapterTest {
 
     private UUID inventoryUUID;
     private InventoryId inventoryId;
-    private TenantId tenantId;
+    private MerchantId merchantId;
     private StoreId storeId;
 
     @BeforeEach
     void setUp() {
         inventoryUUID = UUID.randomUUID();
         inventoryId = InventoryId.of(inventoryUUID);
-        tenantId = TenantId.of(UUID.randomUUID());
+        merchantId = MerchantId.of(UUID.randomUUID());
         storeId = StoreId.of(UUID.randomUUID());
     }
 
     private StockMovement buildMovement() {
         return StockMovement.builder()
                 .id(new StockMovementId(1L))
-                .tenantId(tenantId)
+                .merchantId(merchantId)
                 .storeId(storeId)
                 .inventoryId(inventoryId)
                 .type(StockMovementType.ADJUSTMENT_IN)

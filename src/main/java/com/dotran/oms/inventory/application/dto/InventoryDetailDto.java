@@ -19,7 +19,7 @@ public class InventoryDetailDto {
 
     private UUID productId;
     private String sku;
-    private UUID tenantId;
+    private UUID merchantId;
     private UUID storeId;
     private Long quantity;
     private Long reservedQuantity;

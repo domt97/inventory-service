@@ -15,12 +15,13 @@ import com.dotran.oms.core.domain.id.OrderItemId;
 import com.dotran.oms.core.domain.id.ProductId;
 import com.dotran.oms.core.domain.id.SKU;
 import com.dotran.oms.core.domain.id.StoreId;
-import com.dotran.oms.core.domain.id.TenantId;
+import com.dotran.oms.core.domain.id.MerchantId;
 import com.dotran.oms.core.exception.NotFoundException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -29,6 +30,7 @@ import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -50,21 +52,25 @@ class ExpireByInventoryTransactionTest {
     @InjectMocks
     private ExpireByInventoryTransaction expireByInventoryTransaction;
 
-    private TenantId tenantId;
+    private MerchantId merchantId;
     private StoreId storeId;
     private InventoryId inventoryId;
 
     @BeforeEach
     void setUp() {
-        tenantId = TenantId.of(UUID.randomUUID());
+        merchantId = MerchantId.of(UUID.randomUUID());
         storeId = StoreId.of(UUID.randomUUID());
         inventoryId = InventoryId.of(UUID.randomUUID());
     }
 
     private StockReservation buildReservation(long quantity) {
+        return buildReservation(1L, quantity);
+    }
+
+    private StockReservation buildReservation(long id, long quantity) {
         return StockReservation.builder()
-                .id(new StockReservationId(1L))
-                .tenantId(tenantId)
+                .id(new StockReservationId(id))
+                .merchantId(merchantId)
                 .storeId(storeId)
                 .inventoryId(inventoryId)
                 .orderId(OrderId.of(UUID.randomUUID()))
@@ -80,7 +86,7 @@ class ExpireByInventoryTransactionTest {
     private Inventory buildInventory(long quantity, long reservedQuantity) {
         return Inventory.builder()
                 .id(inventoryId)
-                .tenantId(tenantId)
+                .merchantId(merchantId)
                 .storeId(storeId)
                 .productId(ProductId.of(UUID.randomUUID()))
                 .sku(SKU.of("SKU-001"))
@@ -104,24 +110,24 @@ class ExpireByInventoryTransactionTest {
         StockReservation reservation = buildReservation(20L);
         Inventory inventory = buildInventory(100L, 20L);
 
-        when(stockReservationRepository.expire(anyList())).thenReturn(List.of(reservation));
+        when(stockReservationRepository.markExpired(anyList())).thenReturn(Set.of(reservation.getId()));
         when(inventoryRepository.getById(inventoryId)).thenReturn(Optional.of(inventory));
         when(inventoryRepository.release(inventoryId, 20L)).thenReturn(1);
 
         expireByInventoryTransaction.execute(inventoryId, List.of(reservation));
 
-        verify(stockReservationRepository).expire(anyList());
+        verify(stockReservationRepository).markExpired(List.of(reservation.getId()));
         verify(inventoryRepository).release(inventoryId, 20L);
     }
 
     @Test
     @DisplayName("sums quantities of multiple reservations before releasing")
     void shouldSumQuantitiesBeforeReleasing() {
-        StockReservation r1 = buildReservation(10L);
-        StockReservation r2 = buildReservation(15L);
+        StockReservation r1 = buildReservation(1L, 10L);
+        StockReservation r2 = buildReservation(2L, 15L);
         Inventory inventory = buildInventory(100L, 25L);
 
-        when(stockReservationRepository.expire(anyList())).thenReturn(List.of(r1, r2));
+        when(stockReservationRepository.markExpired(anyList())).thenReturn(Set.of(r1.getId(), r2.getId()));
         when(inventoryRepository.getById(inventoryId)).thenReturn(Optional.of(inventory));
         when(inventoryRepository.release(inventoryId, 25L)).thenReturn(1);
 
@@ -135,7 +141,7 @@ class ExpireByInventoryTransactionTest {
     void shouldThrowWhenInventoryNotFound() {
         StockReservation reservation = buildReservation(20L);
 
-        when(stockReservationRepository.expire(anyList())).thenReturn(List.of(reservation));
+        when(stockReservationRepository.markExpired(anyList())).thenReturn(Set.of(reservation.getId()));
         when(inventoryRepository.getById(inventoryId)).thenReturn(Optional.empty());
 
         assertThrows(NotFoundException.class,
@@ -150,7 +156,7 @@ class ExpireByInventoryTransactionTest {
         // domain passes (reservedQty=30 >= releaseQty=20) but concurrent modification causes SQL to return 0
         Inventory inventory = buildInventory(100L, 30L);
 
-        when(stockReservationRepository.expire(anyList())).thenReturn(List.of(reservation));
+        when(stockReservationRepository.markExpired(anyList())).thenReturn(Set.of(reservation.getId()));
         when(inventoryRepository.getById(inventoryId)).thenReturn(Optional.of(inventory));
         when(inventoryRepository.release(inventoryId, 20L)).thenReturn(0);
 
@@ -166,7 +172,7 @@ class ExpireByInventoryTransactionTest {
         StockReservation reservation = buildReservation(50L);
         Inventory inventory = buildInventory(100L, 10L); // reservedQty=10 < releaseQty=50
 
-        when(stockReservationRepository.expire(anyList())).thenReturn(List.of(reservation));
+        when(stockReservationRepository.markExpired(anyList())).thenReturn(Set.of(reservation.getId()));
         when(inventoryRepository.getById(inventoryId)).thenReturn(Optional.of(inventory));
 
         assertThrows(InvalidReservationException.class,
@@ -180,7 +186,7 @@ class ExpireByInventoryTransactionTest {
     void shouldThrowWhenReservationInWrongState() {
         StockReservation alreadyExpired = StockReservation.builder()
                 .id(new StockReservationId(1L))
-                .tenantId(tenantId)
+                .merchantId(merchantId)
                 .storeId(storeId)
                 .inventoryId(inventoryId)
                 .orderId(OrderId.of(UUID.randomUUID()))
@@ -196,5 +202,50 @@ class ExpireByInventoryTransactionTest {
                 () -> expireByInventoryTransaction.execute(inventoryId, List.of(alreadyExpired)));
 
         verifyNoInteractions(stockReservationRepository, inventoryRepository);
+    }
+
+    @Test
+    @DisplayName("marks reservations EXPIRED before releasing inventory")
+    void shouldMarkExpiredBeforeRelease() {
+        StockReservation reservation = buildReservation(20L);
+
+        when(stockReservationRepository.markExpired(anyList())).thenReturn(Set.of(reservation.getId()));
+        when(inventoryRepository.getById(inventoryId)).thenReturn(Optional.of(buildInventory(100L, 20L)));
+        when(inventoryRepository.release(inventoryId, 20L)).thenReturn(1);
+
+        expireByInventoryTransaction.execute(inventoryId, List.of(reservation));
+
+        InOrder inOrder = inOrder(stockReservationRepository, inventoryRepository);
+        inOrder.verify(stockReservationRepository).markExpired(anyList());
+        inOrder.verify(inventoryRepository).release(inventoryId, 20L);
+    }
+
+    @Test
+    @DisplayName("releases only the quantity of reservations that were still RESERVED (others handled concurrently)")
+    void shouldReleaseOnlyTransitionedReservations() {
+        StockReservation stillReserved = buildReservation(1L, 10L);
+        StockReservation confirmedConcurrently = buildReservation(2L, 15L);
+
+        when(stockReservationRepository.markExpired(anyList())).thenReturn(Set.of(stillReserved.getId()));
+        when(inventoryRepository.getById(inventoryId)).thenReturn(Optional.of(buildInventory(100L, 25L)));
+        when(inventoryRepository.release(inventoryId, 10L)).thenReturn(1);
+
+        expireByInventoryTransaction.execute(inventoryId, List.of(stillReserved, confirmedConcurrently));
+
+        verify(inventoryRepository).release(inventoryId, 10L);
+        verify(inventoryRepository, never()).release(inventoryId, 25L);
+    }
+
+    @Test
+    @DisplayName("does not touch inventory when every reservation was already handled (e.g. overlapping expiry run)")
+    void shouldNotReleaseWhenNoneTransitioned() {
+        StockReservation r1 = buildReservation(1L, 10L);
+        StockReservation r2 = buildReservation(2L, 15L);
+
+        when(stockReservationRepository.markExpired(anyList())).thenReturn(Set.of());
+
+        expireByInventoryTransaction.execute(inventoryId, List.of(r1, r2));
+
+        verifyNoInteractions(inventoryRepository);
     }
 }

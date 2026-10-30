@@ -1,115 +1,114 @@
 package com.dotran.oms.inventory.infrastructure.message;
 
-import com.dotran.oms.inventory.application.command.CreateInventoryCmd;
-import com.dotran.oms.inventory.application.usecase.inventory.CreateInventoryUseCase;
+import com.dotran.oms.core.domain.id.MerchantId;
+import com.dotran.oms.core.domain.id.ProductId;
 import com.dotran.oms.core.domain.id.SKU;
+import com.dotran.oms.core.domain.id.StoreId;
+import com.dotran.oms.inventory.application.command.SyncProductInventoryCmd;
+import com.dotran.oms.inventory.application.command.SyncProductInventoryCmd.SkuSnapshot;
+import com.dotran.oms.inventory.application.command.SyncProductInventoryCmd.Source;
+import com.dotran.oms.inventory.application.usecase.inventory.SyncProductInventoryUseCase;
+import com.dotran.oms.inventory.domain.enums.ProductSkuStatus;
+import com.dotran.oms.inventory.domain.enums.ProductStatus;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.converter.json.Jackson2ObjectMapperBuilder;
 
-import java.time.Instant;
-import java.util.Collections;
-import java.util.List;
 import java.util.UUID;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("ProductCreatedConsumer")
 class ProductCreatedConsumerTest {
 
-    @Mock
-    private ObjectMapper objectMapper;
+    private final ObjectMapper objectMapper = Jackson2ObjectMapperBuilder.json().build();
 
     @Mock
-    private CreateInventoryUseCase createInventoryUseCase;
+    private SyncProductInventoryUseCase syncProductInventoryUseCase;
 
-    @InjectMocks
-    private ProductCreatedConsumer consumer;
-
-    private static final UUID TENANT_ID = UUID.randomUUID();
-    private static final UUID STORE_ID = UUID.randomUUID();
-    private static final UUID PRODUCT_ID = UUID.randomUUID();
-    private static final String PAYLOAD = "\"raw-json\"";
-    private static final String JSON = "event-json";
-
-    @BeforeEach
-    void setUp() throws JsonProcessingException {
-        when(objectMapper.readValue(PAYLOAD, String.class)).thenReturn(JSON);
+    private ProductCreatedConsumer consumer() {
+        return new ProductCreatedConsumer(new OutboxPayloadDecoder(objectMapper), syncProductInventoryUseCase);
     }
 
-    private ConsumerRecord<String, String> record(String key, String value) {
-        return new ConsumerRecord<>("ProductCreated", 0, 0, key, value);
+    /** Kafka value as Debezium EventRouter publishes it: a JSON string containing the event JSON. */
+    private ConsumerRecord<String, String> record(UUID productId, String eventJson) throws JsonProcessingException {
+        return new ConsumerRecord<>("ProductCreated", 0, 0L, productId.toString(), objectMapper.writeValueAsString(eventJson));
     }
 
-    @Test
-    @DisplayName("skips use case when event has no SKUs")
-    void shouldSkipWhenSkusNull() throws JsonProcessingException {
-        var event = com.dotran.oms.inventory.infrastructure.message.dto.ProductCreatedEvent.builder()
-                .eventId(UUID.randomUUID()).occurredAt(Instant.now())
-                .tenantId(TENANT_ID).storeId(STORE_ID).productId(PRODUCT_ID)
-                .skus(null)
-                .build();
-
-        when(objectMapper.readValue(eq(JSON), eq(com.dotran.oms.inventory.infrastructure.message.dto.ProductCreatedEvent.class)))
-                .thenReturn(event);
-
-        consumer.consume(record("key-1", PAYLOAD));
-
-        verifyNoInteractions(createInventoryUseCase);
+    private String event(UUID merchantId, UUID storeId, UUID productId, String skus, String extra) {
+        return """
+                {"eventId":"%s","eventType":"ProductCreated","occurredAt":"2026-10-25T10:00:00Z",
+                 "merchantId":"%s","storeId":"%s","productId":"%s","skus":%s%s}
+                """.formatted(UUID.randomUUID(), merchantId, storeId, productId, skus, extra);
     }
 
     @Test
-    @DisplayName("skips use case when event has empty SKU list")
-    void shouldSkipWhenSkusEmpty() throws JsonProcessingException {
-        var event = com.dotran.oms.inventory.infrastructure.message.dto.ProductCreatedEvent.builder()
-                .eventId(UUID.randomUUID()).occurredAt(Instant.now())
-                .tenantId(TENANT_ID).storeId(STORE_ID).productId(PRODUCT_ID)
-                .skus(Collections.emptyList())
-                .build();
+    @DisplayName("maps the event to a version-0 sync with ACTIVE product and SKUs")
+    void mapsToSyncCommand() throws Exception {
+        UUID merchantId = UUID.randomUUID(), storeId = UUID.randomUUID(), productId = UUID.randomUUID();
 
-        when(objectMapper.readValue(eq(JSON), eq(com.dotran.oms.inventory.infrastructure.message.dto.ProductCreatedEvent.class)))
-                .thenReturn(event);
+        consumer().consume(record(productId, event(merchantId, storeId, productId, "[{\"value\":\"A\"},{\"value\":\"B\"}]", "")));
 
-        consumer.consume(record("key-1", PAYLOAD));
-
-        verifyNoInteractions(createInventoryUseCase);
+        ArgumentCaptor<SyncProductInventoryCmd> captor = ArgumentCaptor.forClass(SyncProductInventoryCmd.class);
+        verify(syncProductInventoryUseCase).sync(captor.capture());
+        SyncProductInventoryCmd cmd = captor.getValue();
+        assertThat(cmd.getSource()).isEqualTo(Source.PRODUCT_CREATED);
+        assertThat(cmd.getMerchantId()).isEqualTo(MerchantId.of(merchantId));
+        assertThat(cmd.getStoreId()).isEqualTo(StoreId.of(storeId));
+        assertThat(cmd.getProductId()).isEqualTo(ProductId.of(productId));
+        assertThat(cmd.getVersion()).isZero();
+        assertThat(cmd.getProductStatus()).isEqualTo(ProductStatus.ACTIVE);
+        assertThat(cmd.getSkus()).containsExactly(
+                new SkuSnapshot(SKU.of("A"), ProductSkuStatus.ACTIVE), new SkuSnapshot(SKU.of("B"), ProductSkuStatus.ACTIVE));
     }
 
     @Test
-    @DisplayName("calls createInventoryUseCase with correct tenantId, storeId, productId and SKUs")
-    void shouldCreateInventoryWhenSkusPresent() throws JsonProcessingException {
-        List<SKU> skus = List.of(SKU.of("SKU-001"), SKU.of("SKU-002"));
+    @DisplayName("passes an explicit version through")
+    void passesVersion() throws Exception {
+        UUID productId = UUID.randomUUID();
 
-        var event = com.dotran.oms.inventory.infrastructure.message.dto.ProductCreatedEvent.builder()
-                .eventId(UUID.randomUUID()).occurredAt(Instant.now())
-                .tenantId(TENANT_ID).storeId(STORE_ID).productId(PRODUCT_ID)
-                .skus(skus)
-                .build();
+        consumer().consume(record(productId, event(UUID.randomUUID(), UUID.randomUUID(), productId, "[{\"value\":\"A\"}]", ",\"version\":0")));
 
-        when(objectMapper.readValue(eq(JSON), eq(com.dotran.oms.inventory.infrastructure.message.dto.ProductCreatedEvent.class)))
-                .thenReturn(event);
+        ArgumentCaptor<SyncProductInventoryCmd> captor = ArgumentCaptor.forClass(SyncProductInventoryCmd.class);
+        verify(syncProductInventoryUseCase).sync(captor.capture());
+        assertThat(captor.getValue().getVersion()).isZero();
+    }
 
-        consumer.consume(record("key-1", PAYLOAD));
+    @Test
+    @DisplayName("skips the use case when the event has no SKUs")
+    void skipsWithoutSkus() throws Exception {
+        UUID productId = UUID.randomUUID();
 
-        ArgumentCaptor<CreateInventoryCmd> captor = ArgumentCaptor.forClass(CreateInventoryCmd.class);
-        verify(createInventoryUseCase).create(captor.capture());
+        consumer().consume(record(productId, event(UUID.randomUUID(), UUID.randomUUID(), productId, "[]", "")));
 
-        CreateInventoryCmd cmd = captor.getValue();
-        assertEquals(TENANT_ID, cmd.getTenantId().getValue());
-        assertEquals(STORE_ID, cmd.getStoreId().getValue());
-        assertEquals(PRODUCT_ID, cmd.getProductId().getValue());
-        assertEquals(skus, cmd.getSkus());
+        verifyNoInteractions(syncProductInventoryUseCase);
+    }
+
+    @Test
+    @DisplayName("ignores a tombstone (null value)")
+    void ignoresTombstone() throws Exception {
+        consumer().consume(new ConsumerRecord<>("ProductCreated", 0, 0L, "key", null));
+
+        verifyNoInteractions(syncProductInventoryUseCase);
+    }
+
+    @Test
+    @DisplayName("throws a JsonProcessingException for an unreadable payload and never calls the use case")
+    void unreadablePayload_throws() {
+        assertThatThrownBy(() -> consumer().consume(new ConsumerRecord<>("ProductCreated", 0, 0L, "key", "not json")))
+                .isInstanceOf(JsonProcessingException.class);
+
+        verifyNoInteractions(syncProductInventoryUseCase);
     }
 }

@@ -1,6 +1,7 @@
 package com.dotran.oms.inventory.infrastructure.persistence;
 
 import com.dotran.oms.inventory.application.repository.InventoryRepository;
+import com.dotran.oms.inventory.domain.enums.InventoryStatus;
 import com.dotran.oms.inventory.domain.model.Inventory;
 import com.dotran.oms.inventory.infrastructure.mapper.InventoryPersistenceMapper;
 import com.dotran.oms.inventory.infrastructure.persistence.entity.InventoryEntity;
@@ -10,7 +11,7 @@ import com.dotran.oms.core.domain.id.InventoryId;
 import com.dotran.oms.core.domain.id.ProductId;
 import com.dotran.oms.core.domain.id.SKU;
 import com.dotran.oms.core.domain.id.StoreId;
-import com.dotran.oms.core.domain.id.TenantId;
+import com.dotran.oms.core.domain.id.MerchantId;
 import com.dotran.oms.core.exception.NotFoundException;
 import lombok.RequiredArgsConstructor;
 
@@ -157,13 +158,26 @@ public class InventoryPersistenceAdapter implements InventoryRepository {
     }
 
     @Override
-    public int stockIn(InventoryId inventoryId, TenantId tenantId, StoreId storeId, Long quantity) {
-        return springDataInventoryRepository.stockIn(inventoryId.getValue(), tenantId.getValue(), storeId.getValue(), quantity);
+    public int stockIn(InventoryId inventoryId, MerchantId merchantId, StoreId storeId, Long quantity) {
+        return springDataInventoryRepository.stockIn(inventoryId.getValue(), merchantId.getValue(), storeId.getValue(), quantity);
     }
 
     @Override
-    public int stockOut(InventoryId inventoryId, TenantId tenantId, StoreId storeId, Long quantity) {
-        return springDataInventoryRepository.stockOut(inventoryId.getValue(), tenantId.getValue(), storeId.getValue(), quantity);
+    public int stockOut(InventoryId inventoryId, MerchantId merchantId, StoreId storeId, Long quantity) {
+        return springDataInventoryRepository.stockOut(inventoryId.getValue(), merchantId.getValue(), storeId.getValue(), quantity);
     }
 
+    @Override
+    public int insertIfAbsent(Inventory inventory) {
+        return springDataInventoryRepository.insertIfAbsent(inventory.getId().getValue(), inventory.getMerchantId().getValue(),
+                inventory.getStoreId().getValue(), inventory.getProductId().getValue(), inventory.getSku().getValue(),
+                inventory.getStatus().name());
+    }
+
+    @Override
+    public int updateStatus(InventoryId inventoryId, MerchantId merchantId, StoreId storeId, ProductId productId,
+                            InventoryStatus status) {
+        return springDataInventoryRepository.updateStatus(inventoryId.getValue(), merchantId.getValue(), storeId.getValue(),
+                productId.getValue(), status.name());
+    }
 }

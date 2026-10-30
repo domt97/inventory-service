@@ -72,28 +72,28 @@ Shipment              (logistics concern — does not affect inventory)
 ┌─────────────────────────────────────────────────────────────────┐
 │                       Infrastructure Layer                      │
 │                                                                 │
-│  ┌──────────────────┐  ┌──────────────────┐  ┌──────────────┐  │
-│  │  REST Controllers│  │ Persistence      │  │ Message      │  │
-│  │  @WebAdapter     │  │ Adapters         │  │ Consumers    │  │
-│  │                  │  │ @PersistenceAdptr│  │ (Kafka, SQS) │  │
-│  └────────┬─────────┘  └────────┬─────────┘  └──────┬───────┘  │
+│  ┌──────────────────┐  ┌──────────────────┐  ┌──────────────┐   │
+│  │  REST Controllers│  │ Persistence      │  │ Message      │   │
+│  │  @WebAdapter     │  │ Adapters         │  │ Consumers    │   │
+│  │                  │  │ @PersistenceAdptr│  │ (Kafka, SQS) │   │
+│  └────────┬─────────┘  └────────┬─────────┘  └──────┬───────┘   │
 └───────────┼─────────────────────┼────────────────────┼──────────┘
             │    (inbound ports)  │   (outbound ports) │
 ┌───────────┼─────────────────────┼────────────────────┼──────────┐
 │           │   Application Layer │                    │          │
 │           │                     │                    │          │
 │  ┌────────▼──────────────────────────────────────────▼──────┐   │
-│  │  Use Cases (@UseCase)                                     │   │
-│  │  ReserveStockService  │  ConfirmStockReservationService   │   │
-│  │  AdjustStockService   │  ExpireStockReservationService    │   │
-│  │  CreateInventoryService  │  LoadInventoryService          │   │
-│  └──────────────────────────────┬────────────────────────────┘   │
+│  │  Use Cases (@UseCase)                                     │  │
+│  │  ReserveStockService  │  ConfirmStockReservationService   │  │
+│  │  AdjustStockService   │  ExpireStockReservationService    │  │
+│  │  CreateInventoryService  │  LoadInventoryService          │  │
+│  └──────────────────────────────┬────────────────────────────┘  │
 │                                 │                               │
-│  ┌──────────────────────────────▼────────────────────────────┐   │
-│  │  Port Interfaces (Repository contracts)                   │   │
-│  │  InventoryRepository  │  StockReservationRepository       │   │
-│  │  StockMovementRepository  │  TenantRepository             │   │
-│  └───────────────────────────────────────────────────────────┘   │
+│  ┌──────────────────────────────▼────────────────────────────┐  │
+│  │  Port Interfaces (Repository contracts)                   │  │
+│  │  InventoryRepository  │  StockReservationRepository       │  │
+│  │  StockMovementRepository                                  │  │
+│  └───────────────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────────┘
                                  │
 ┌────────────────────────────────▼────────────────────────────────┐
@@ -142,7 +142,7 @@ Shipment              (logistics concern — does not affect inventory)
 ### Value Objects
 
 All identifiers are strongly typed via the `oms-core` shared module:  
-`InventoryId`, `StoreId`, `TenantId`, `ProductId`, `SKU`, `OrderId`, `ReferenceId`
+`InventoryId`, `StoreId`, `MerchantId`, `ProductId`, `SKU`, `OrderId`, `ReferenceId`
 
 ---
 
@@ -184,7 +184,6 @@ Each inventory's expiry runs in an isolated `REQUIRES_NEW` transaction — a fai
 | Database | PostgreSQL 16 |
 | Migrations | Flyway |
 | Messaging | Apache Kafka, AWS SQS (Spring Cloud AWS) |
-| NoSQL | AWS DynamoDB (tenant metadata) |
 | Mapping | MapStruct 1.6.3 |
 | Boilerplate | Lombok |
 | API Docs | SpringDoc OpenAPI 3.0 (Swagger UI) |
@@ -219,8 +218,7 @@ src/main/java/com/dotran/oms/inventory/
 │   ├── repository/                  # Outbound port interfaces
 │   │   ├── InventoryRepository.java
 │   │   ├── StockReservationRepository.java
-│   │   ├── StockMovementRepository.java
-│   │   └── TenantRepository.java
+│   │   └── StockMovementRepository.java
 │   ├── service/                     # Use case implementations (@UseCase)
 │   │   ├── ReserveStockService.java
 │   │   ├── ConfirmStockReservationService.java
@@ -262,7 +260,7 @@ src/main/java/com/dotran/oms/inventory/
 **`inventories`**
 ```
 id                UUID PK
-tenant_id         UUID NOT NULL
+merchant_id       UUID NOT NULL
 store_id          UUID NOT NULL
 store_product_id  UUID NOT NULL
 sku               VARCHAR(50) NOT NULL
@@ -276,7 +274,7 @@ UNIQUE (store_id, sku)
 **`stock_reservations`**
 ```
 id              BIGINT PK (sequence, cache=20 for performance)
-tenant_id / store_id
+merchant_id / store_id
 inventory_id    UUID FK → inventories
 order_id / order_item_id
 quantity        BIGINT NOT NULL
@@ -287,7 +285,7 @@ expires_at      TIMESTAMPTZ
 **`stock_movements`** (append-only audit log)
 ```
 id              BIGINT PK (sequence, cache=20)
-tenant_id / store_id / inventory_id
+merchant_id / store_id / inventory_id
 type            VARCHAR(30)   -- StockMovementType: RECEIVE | SALE | RETURN | ADJUSTMENT_IN | ADJUSTMENT_OUT | DAMAGE | TRANSFER_IN | TRANSFER_OUT
 quantity        BIGINT
 reference_type  VARCHAR(50)   -- e.g. ORDER, ADJUSTMENT
@@ -306,11 +304,16 @@ created_at
 
 ## Getting Started
 
+> **No DynamoDB any more (2026-10).** inventory-service no longer looks merchants up: the merchant id comes with
+> `ProductCreated` and is stored on every inventory row; merchants themselves live in stores-service (Postgres).
+> Nothing to migrate here. If you recreate the `store` database for the stores-service change, recreate `inventory`
+> too so no inventory rows point to stores that no longer exist (see the stores-service README).
+
 ### Prerequisites
 
 - Java 17+
 - PostgreSQL 12+
-- LocalStack (for local AWS SQS/DynamoDB)
+- LocalStack (for local AWS SQS/S3)
 - Kafka
 
 ### Database Setup
@@ -326,17 +329,10 @@ Flyway runs migrations automatically on startup from `src/main/resources/db/migr
 
 ```bash
 # Start LocalStack
-cd localstack && docker-compose up -d
+cd ../development/docker && docker compose up -d localstack   # LocalStack runs from the development repo
 
 # Create SQS queue
 awslocal sqs create-queue --queue-name localdev-reservation-expire-queue
-
-# Create DynamoDB table
-awslocal dynamodb create-table \
-  --table-name localdev_tenant_info \
-  --attribute-definitions AttributeName=id,AttributeType=S \
-  --key-schema AttributeName=id,KeyType=HASH \
-  --billing-mode PAY_PER_REQUEST
 ```
 
 ### Run
@@ -390,9 +386,6 @@ spring:
 
 aws:
   region: eu-west-1
-  dynamodb:
-    table:
-      tenant-info: localdev_tenant_info
   sqs:
     queues:
       reservation-expire: localdev-reservation-expire-queue
@@ -408,5 +401,5 @@ All AWS credentials and endpoints support environment variable overrides:
 
 ```
 AWS_REGION, AWS_ENDPOINT, AWS_ACCESS_KEY, AWS_SECRET_KEY
-AWS_DYNAMODB_TABLE, AWS_SQS_RESERVATION_EXPIRE_QUEUE
+AWS_SQS_RESERVATION_EXPIRE_QUEUE
 ```

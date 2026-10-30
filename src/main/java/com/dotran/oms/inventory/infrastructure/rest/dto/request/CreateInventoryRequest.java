@@ -16,7 +16,7 @@ import java.util.UUID;
 public class CreateInventoryRequest {
 
     @NotNull
-    private UUID tenantId;
+    private UUID merchantId;
 
     @NotNull
     private UUID storeId;

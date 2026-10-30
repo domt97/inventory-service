@@ -6,7 +6,7 @@ import com.dotran.oms.core.domain.BaseDomain;
 import com.dotran.oms.core.domain.id.InventoryId;
 import com.dotran.oms.core.domain.id.ReferenceId;
 import com.dotran.oms.core.domain.id.StoreId;
-import com.dotran.oms.core.domain.id.TenantId;
+import com.dotran.oms.core.domain.id.MerchantId;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.experimental.SuperBuilder;
@@ -18,7 +18,7 @@ import java.time.Instant;
 @EqualsAndHashCode(callSuper = true)
 public class StockMovement extends BaseDomain<StockMovementId> {
 
-    private TenantId tenantId;
+    private MerchantId merchantId;
     private StoreId storeId;
 
     private InventoryId inventoryId;
@@ -37,7 +37,7 @@ public class StockMovement extends BaseDomain<StockMovementId> {
     public static StockMovement newInstance(Inventory inventory, StockMovementType type, Long quantity,
                                             String referenceType, ReferenceId referenceId, String reason) {
         StockMovement stockMovement = StockMovement.builder()
-                .tenantId(inventory.getTenantId())
+                .merchantId(inventory.getMerchantId())
                 .storeId(inventory.getStoreId())
                 .inventoryId(inventory.getId())
                 .type(type)

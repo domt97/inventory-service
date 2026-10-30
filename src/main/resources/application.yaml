@@ -63,14 +63,23 @@ aws:
   access-key: ${AWS_ACCESS_KEY:test}
   secret-key: ${AWS_SECRET_KEY:test}
 
-  dynamodb:
-    table:
-      tenant-info: ${AWS_DYNAMODB_TABLE:localdev_tenant_info}
   sqs:
     queues:
       reservation-expire: ${AWS_SQS_RESERVATION_EXPIRE_QUEUE:localdev-reservation-expire-queue}
 
 app:
+  kafka:
+    # Replication factor of the dead-letter topics (ProductCreated.DLT, ProductUpdated.DLT); 3 in production.
+    dlt-replicas: ${KAFKA_DLT_REPLICAS:1}
+  reservation-expiry:
+    # Reservations expired per page of the sweep.
+    batch-size: ${RESERVATION_EXPIRY_BATCH_SIZE:500}
+    # Stop starting new pages after this; at most the listener visibility timeout (90 s) minus 30 s for the last page.
+    time-budget: ${RESERVATION_EXPIRY_TIME_BUDGET:PT40S}
+    # Ticks older than this are dropped if this instance swept recently; must be longer than the 1-minute schedule
+    # plus time-budget (a tick can wait behind a running sweep).
+    max-tick-age: ${RESERVATION_EXPIRY_MAX_TICK_AGE:PT2M}
+
   swagger:
     title: Inventory Service API
     version: v1

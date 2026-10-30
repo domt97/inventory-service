@@ -5,13 +5,11 @@ import com.dotran.oms.inventory.application.dto.InventoryDetailDto;
 import com.dotran.oms.inventory.application.mapper.InventoryMapper;
 import com.dotran.oms.inventory.application.repository.InventoryRepository;
 import com.dotran.oms.inventory.application.repository.StockMovementRepository;
-import com.dotran.oms.inventory.application.repository.TenantRepository;
 import com.dotran.oms.inventory.application.usecase.inventory.AdjustStockUseCase;
 import com.dotran.oms.inventory.domain.exception.InsufficientStockException;
 import com.dotran.oms.inventory.domain.model.Inventory;
 import com.dotran.oms.inventory.domain.model.StockMovement;
 import com.dotran.oms.core.annotation.UseCase;
-import com.dotran.oms.core.domain.TenantInfo;
 import com.dotran.oms.core.exception.NotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -24,24 +22,20 @@ public class AdjustStockService implements AdjustStockUseCase {
 
     private final InventoryRepository repository;
     private final StockMovementRepository stockMovementRepository;
-    private final TenantRepository tenantRepository;
     private final InventoryMapper inventoryMapper;
 
     @Override
     @Transactional
     public InventoryDetailDto adjust(AdjustStockCmd cmd) {
-        tenantRepository.findByTenantId(cmd.getTenantId())
-                .orElseThrow(() -> new NotFoundException("Tenant not found"));
-
         Inventory inventory = repository.getById(cmd.getInventoryId())
                 .orElseThrow(() -> new NotFoundException("Inventory not found"));
 
-        inventory.validateTenantAndStore(cmd.getTenantId(), cmd.getStoreId());
+        inventory.validateMerchantAndStore(cmd.getMerchantId(), cmd.getStoreId());
         inventory.adjust(cmd.getMovementType(), cmd.getQuantity()); // domain validation
 
         int updated = cmd.getMovementType().isStockIn()
-                ? repository.stockIn(cmd.getInventoryId(), cmd.getTenantId(), cmd.getStoreId(), cmd.getQuantity())
-                : repository.stockOut(cmd.getInventoryId(), cmd.getTenantId(), cmd.getStoreId(), cmd.getQuantity());
+                ? repository.stockIn(cmd.getInventoryId(), cmd.getMerchantId(), cmd.getStoreId(), cmd.getQuantity())
+                : repository.stockOut(cmd.getInventoryId(), cmd.getMerchantId(), cmd.getStoreId(), cmd.getQuantity());
 
         if (updated == 0) {
             throw new InsufficientStockException();

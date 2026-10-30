@@ -11,7 +11,7 @@ import com.dotran.oms.core.domain.id.InventoryId;
 import com.dotran.oms.core.domain.id.ProductId;
 import com.dotran.oms.core.domain.id.SKU;
 import com.dotran.oms.core.domain.id.StoreId;
-import com.dotran.oms.core.domain.id.TenantId;
+import com.dotran.oms.core.domain.id.MerchantId;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.experimental.SuperBuilder;
@@ -23,7 +23,7 @@ import java.time.Instant;
 @EqualsAndHashCode(callSuper = true)
 public class Inventory extends BaseDomain<InventoryId> {
 
-    private TenantId tenantId;
+    private MerchantId merchantId;
     private StoreId storeId;
 
     private ProductId productId;
@@ -42,6 +42,24 @@ public class Inventory extends BaseDomain<InventoryId> {
         this.reservedQuantity = 0L;
         this.status = InventoryStatus.ACTIVE;
         this.createdAt = this.updatedAt = Instant.now();
+    }
+
+    /** A new inventory row created from the catalog (ProductCreated / ProductUpdated): no stock, status from the catalog. */
+    public static Inventory forCatalogSku(MerchantId merchantId, StoreId storeId, ProductId productId, SKU sku,
+                                          InventoryStatus status) {
+        Instant now = Instant.now();
+        return Inventory.builder()
+                .id(InventoryId.newInventoryId())
+                .merchantId(merchantId)
+                .storeId(storeId)
+                .productId(productId)
+                .sku(sku)
+                .quantity(0L)
+                .reservedQuantity(0L)
+                .status(status)
+                .createdAt(now)
+                .updatedAt(now)
+                .build();
     }
 
     public long availableQuantity() {
@@ -107,9 +125,9 @@ public class Inventory extends BaseDomain<InventoryId> {
         }
     }
 
-    public void validateTenantAndStore(TenantId tenantId, StoreId storeId) {
-        if (!this.tenantId.equals(tenantId) || !this.storeId.equals(storeId)) {
-            throw new ValidationException("Inventory does not belong to the specified tenant or store");
+    public void validateMerchantAndStore(MerchantId merchantId, StoreId storeId) {
+        if (!this.merchantId.equals(merchantId) || !this.storeId.equals(storeId)) {
+            throw new ValidationException("Inventory does not belong to the specified merchant or store");
         }
     }
 }

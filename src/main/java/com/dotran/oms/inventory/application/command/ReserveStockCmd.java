@@ -5,7 +5,7 @@ import com.dotran.oms.core.domain.id.OrderItemId;
 import com.dotran.oms.core.domain.id.ProductId;
 import com.dotran.oms.core.domain.id.SKU;
 import com.dotran.oms.core.domain.id.StoreId;
-import com.dotran.oms.core.domain.id.TenantId;
+import com.dotran.oms.core.domain.id.MerchantId;
 import lombok.Builder;
 import lombok.Data;
 import lombok.Getter;
@@ -17,7 +17,7 @@ import java.util.List;
 @Builder
 public class ReserveStockCmd {
 
-    private TenantId tenantId;
+    private MerchantId merchantId;
     private StoreId storeId;
     private OrderId orderId;
     private List<ReserveStockSKU> skus;

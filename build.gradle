@@ -36,8 +36,6 @@ dependencies {
 
 	// AWS
 	implementation platform("software.amazon.awssdk:bom:2.31.76")
-	implementation "software.amazon.awssdk:dynamodb"
-	implementation "software.amazon.awssdk:dynamodb-enhanced"
 
 	// Spring Cloud AWS
 	implementation platform("io.awspring.cloud:spring-cloud-aws-dependencies:${springCloudAwsVersion}")

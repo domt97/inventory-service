@@ -1,5 +1,6 @@
 package com.dotran.oms.inventory.infrastructure.persistence;
 
+import com.dotran.oms.inventory.application.repository.ExpiryCursor;
 import com.dotran.oms.inventory.application.repository.StockReservationRepository;
 import com.dotran.oms.inventory.common.id.StockReservationId;
 import com.dotran.oms.inventory.domain.enums.ReservationStatus;
@@ -9,17 +10,16 @@ import com.dotran.oms.inventory.infrastructure.persistence.entity.StockReservati
 import com.dotran.oms.inventory.infrastructure.persistence.jpa.SpringDataStockReservationRepository;
 import com.dotran.oms.core.annotation.PersistenceAdapter;
 import com.dotran.oms.core.domain.id.OrderId;
-import com.dotran.oms.core.exception.NotFoundException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
-import java.util.HashSet;
+import java.util.Collection;
+import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 
 @PersistenceAdapter
 @RequiredArgsConstructor
@@ -51,13 +51,9 @@ public class StockReservationRepositoryAdapter implements StockReservationReposi
     }
 
     @Override
-    public StockReservation expire(StockReservation stockReservation) {
-        return this.update(stockReservation);
-    }
-
-    @Override
-    public List<StockReservation> expire(List<StockReservation> stockReservations) {
-        return this.updateBatch(stockReservations);
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Set<StockReservationId> markExpired(Collection<StockReservationId> stockReservationIds) {
+        return transition(stockReservationIds, ReservationStatus.RESERVED, ReservationStatus.EXPIRED);
     }
 
     @Override
@@ -70,14 +66,15 @@ public class StockReservationRepositoryAdapter implements StockReservationReposi
     }
 
     @Override
-    public List<StockReservation> confirm(List<StockReservation> stockReservations) {
-        return this.updateBatch(stockReservations);
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Set<StockReservationId> markConfirmed(Collection<StockReservationId> stockReservationIds) {
+        return transition(stockReservationIds, ReservationStatus.RESERVED, ReservationStatus.CONFIRMED);
     }
 
     @Override
-    public List<StockReservation> getExpiredReservations(Instant expiresAtBefore) {
+    public List<StockReservation> getExpiredReservations(Instant expiresAtBefore, ExpiryCursor after, int limit) {
         List<StockReservationEntity> entities = springDataStockReservationRepository
-                .findByStatusAndExpiresAtBefore(ReservationStatus.RESERVED, expiresAtBefore);
+                .findExpiredAfter(expiresAtBefore, after.expiresAt(), after.id().getValue(), limit);
 
         return entities.stream()
                 .map(stockReservationPersistenceMapper::toDomain)
@@ -90,48 +87,29 @@ public class StockReservationRepositoryAdapter implements StockReservationReposi
                 .map(stockReservationPersistenceMapper::toDomain);
     }
 
-    private StockReservation update(StockReservation stockReservation) {
-        StockReservationEntity entity = springDataStockReservationRepository
-                .findById(stockReservation.getId().getValue())
-                .orElseThrow(() -> new NotFoundException("Stock reservation not found"));
+    /**
+     * Ids are deduplicated and updated in ascending order so concurrent transactions lock rows in the same order.
+     * A row that is missing or no longer in {@code from} updates 0 rows and is reported as not transitioned
+     * (reservations are never deleted, so in practice this means another transaction already moved it).
+     * The native UPDATE bypasses the persistence context: entities already loaded in the same transaction keep
+     * their old status, so do not re-read reservations after this call without clearing the context.
+     */
+    private Set<StockReservationId> transition(Collection<StockReservationId> stockReservationIds,
+                                               ReservationStatus from,
+                                               ReservationStatus to) {
+        List<Long> ids = stockReservationIds.stream()
+                .map(StockReservationId::getValue)
+                .distinct()
+                .sorted()
+                .toList();
 
-        stockReservationPersistenceMapper.updateStatus(stockReservation, entity);
-
-        StockReservationEntity updatedEntity = springDataStockReservationRepository.saveAndFlush(entity);
-
-        return stockReservationPersistenceMapper.toDomain(updatedEntity);
-    }
-
-    private List<StockReservation> updateBatch(List<StockReservation> stockReservations) {
-        Map<Long, StockReservation> stockReservationMap = stockReservations
-                .stream()
-                .collect(Collectors.toMap(e -> e.getId().getValue(), Function.identity()));
-
-        List<StockReservationEntity> entities = springDataStockReservationRepository
-                .findAllById(stockReservationMap.keySet());
-        Set<Long> foundIds = entities.stream()
-                .map(StockReservationEntity::getId)
-                .collect(Collectors.toSet());
-        if (!foundIds.equals(stockReservationMap.keySet())) {
-            Set<Long> missingIds = new HashSet<>(stockReservationMap.keySet());
-
-            missingIds.removeAll(foundIds);
-
-            throw new IllegalStateException("Stock reservations not found: " + missingIds);
-        }
-
-        for (StockReservationEntity entity : entities) {
-            StockReservation stockReservation = stockReservationMap.get(entity.getId());
-
-            if (stockReservation != null) {
-                stockReservationPersistenceMapper.updateStatus(stockReservation, entity);
+        Set<StockReservationId> transitioned = new LinkedHashSet<>();
+        for (Long id : ids) {
+            int updated = springDataStockReservationRepository.transitionStatus(id, from.name(), to.name());
+            if (updated == 1) {
+                transitioned.add(StockReservationId.of(id));
             }
         }
-
-        List<StockReservationEntity> updatedEntities = springDataStockReservationRepository.saveAllAndFlush(entities);
-
-        return updatedEntities.stream()
-                .map(stockReservationPersistenceMapper::toDomain)
-                .toList();
+        return transitioned;
     }
 }

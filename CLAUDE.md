@@ -7,8 +7,9 @@ that publishes/consumes events or depends on another service.
 ## Owns
 
 Stock truth per (store, SKU): quantity, reservations for orders, and an audit trail of every stock change.
-Postgres DB `inventory`, schema `inventory`; tenant info from DynamoDB. Port **8058**.
-Consumes `ProductCreated` (Kafka) and a reservation-expire tick (EventBridge → SQS, every minute).
+Postgres DB `inventory`, schema `inventory`; no DynamoDB (merchant id arrives with `ProductCreated`). Port **8058**.
+Consumes `ProductCreated` and `ProductUpdated` (Kafka, through `SyncProductInventoryService`) and a reservation-expire tick (EventBridge → SQS, every minute).
+Failed Kafka records go to `<topic>.DLT` (`KafkaErrorHandlingConfig`).
 Publishes nothing yet (no outbox table).
 
 ## Layout (`com.dotran.oms.inventory`)
@@ -16,10 +17,11 @@ Publishes nothing yet (no outbox table).
 | Layer | Package | Contains |
 |-------|---------|----------|
 | Domain (no Spring) | `domain/model` | `Inventory` (aggregate), `StockReservation` (aggregate), `StockMovement` (audit entity) |
-| | `domain/enums`, `exception` | `ReservationStatus`, `StockMovementType`, `InventoryStatus`; `InsufficientStockException`, `InvalidQuantityException`, `InvalidReservation*` |
+| | `domain/enums`, `exception` | `ReservationStatus`, `StockMovementType`, `InventoryStatus`, `ProductStatus`, `ProductSkuStatus`; `InsufficientStockException`, `InvalidQuantityException`, `InvalidReservation*`, `InvalidCatalogEventException`, `CatalogOwnershipMismatchException` |
 | Application | `application/usecase/{inventory,reservation,movement}` | Inbound ports `XxxUseCase` |
 | | `application/service` | `@UseCase` implementations (flat package), `@Transactional` here |
 | | `application/command`, `dto`, `repository`, `jobs` | `XxxCmd`, `XxxDto`, outbound ports |
+| | `application/config` | `@ConfigurationProperties` used by use cases (`ReservationExpiryProperties`) |
 | Infrastructure | `infrastructure/rest/{api,internal,dto,mapper,exception}` | Public controllers under `/v1/inventory/inventories`; internal controller under `/internal/v1/inventory/inventories` (`@Hidden`); `InventoryExceptionHandler` |
 | | `infrastructure/persistence/{entity,jpa}` | Adapters, entities, `SpringDataXxxRepository` (native SQL for stock updates) |
 | | `infrastructure/message` (+ `dto`) | Kafka/SQS consumers = anti-corruption layer; external event DTOs live here, never in `domain` |
@@ -33,18 +35,56 @@ Publishes nothing yet (no outbox table).
   (`Inventory.reserve()` etc.) validates first, but **the SQL guard is what prevents oversell** under concurrency.
   Keep this pattern for any new stock operation; do not load-modify-save quantities.
 - `StockReservation` transitions only from `RESERVED` → `CONFIRMED` | `RELEASED` | `EXPIRED`. TTL is 30 min (`StockReservation.reserve`).
-- Expiry runs per inventory in its own transaction (`ExpireByInventoryTransaction`, `REQUIRES_NEW`) so one failure does not roll back others.
+  The domain method states the rule; the **guarded UPDATE enforces it**: `StockReservationRepository.markConfirmed` / `markExpired`
+  run `UPDATE ... WHERE id = :id AND status = 'RESERVED'` per id (ascending) and return the ids that won. Change
+  `reserved_quantity` only for the winners. Never save a reservation status via load-modify-save; a new transition
+  (e.g. release) gets its own guarded `markXxx` method.
+- **Lock order**: reservation status updates by id ascending, then inventory rows in Java `UUID.compareTo` order
+  (`ReserveStockService` sorts lines, `ConfirmStockReservationService` uses a `TreeMap` with the same comparator).
+  Java and Postgres order UUIDs differently, so any new multi-inventory locker must use the same Java comparator
+  (not SQL `ORDER BY id ... FOR UPDATE`). Keep it, or deadlocks return.
+- Confirm is idempotent per order: all `CONFIRMED` → no-op; any `EXPIRED`/`RELEASED` → `InvalidReservationStateException` ("not RESERVED", final);
+  a lost guarded update → `InvalidReservationStateException` ("modified concurrently", retry resolves it) and the whole transaction rolls back.
+- Expiry runs per inventory in its own transaction (`ExpireByInventoryTransaction`, `REQUIRES_NEW`) so one failure does not roll back others;
+  `ExpireStockReservationService` catches any `RuntimeException` per inventory, logs `Reservation expiry failed for inventory {}` and continues
+  (the rolled-back reservations stay `RESERVED` and are retried on the next tick; the SQS message is still acknowledged).
+- **The expiry tick is only a signal; each sweep is bounded.** `ExpireStockReservationService` pages `RESERVED` rows past `expires_at`
+  in `(expires_at, id)` order with a keyset cursor (`ExpiryCursor`, `batch-size` 500) and stops starting pages after `time-budget` (40 s);
+  the rest waits for the next tick. The cursor only moves forward, so a failing inventory cannot block the rest of a run. The query keeps
+  `status = 'RESERVED'` as a literal so the partial index `idx_stock_reservation_expiry` (V2) is used.
+  `SqsReservationExpireConsumer` takes one tick at a time (`maxConcurrentMessages = 1`, visibility 90 s > time budget) and drops a tick older
+  than `max-tick-age` (2 min) **only if this instance swept within `max-tick-age`** (fails open: missing/bad/future timestamp → run).
+  There is no cross-instance lock: overlapping sweeps on two instances are safe because of the guarded `markExpired`. Settings live in
+  `app.reservation-expiry` (`ReservationExpiryProperties`, validated at startup).
 - `inventories` is unique on (store_id, sku).
+
+## Catalog sync invariants (`SyncProductInventoryService`)
+
+- **Version gate first.** Every `ProductCreated` (version 0) / `ProductUpdated` (version ≥ 1) transaction starts with the
+  upsert on `product_catalog_versions` (`advance`). It applies the event only if the version is newer and merchant/store
+  match, and its row lock serialises all work on one product. 0 rows → stale/duplicate (skip) or ownership mismatch
+  (`CatalogOwnershipMismatchException` → DLT). Never move it after other reads or writes. (A `ProductCreated` without
+  SKUs returns in the consumer before the gate; harmless.)
+- **Status is only written by the guarded native `updateStatus`** (`… AND status <> :status`), rows in Java `UUID` order.
+  Never save a loaded `Inventory` for this: it would overwrite quantities. The sync never writes quantities.
+- New rows go through `insertIfAbsent` (`ON CONFLICT (store_id, sku) DO NOTHING`), sorted by SKU code.
+- **Rows are never deleted** (reservations and movements reference them without FKs). Removed SKUs become INACTIVE.
+- Status = orderable (BR-INV-08): `InventoryStatus.orderable(productStatus, skuStatus, present)`.
+- Contract errors (`InvalidCatalogEventException`, JSON errors, `DataIntegrityViolationException`) and mismatches go to
+  the DLT at once. Database connection failures are retried without limit (backoff up to 1 min), so an outage only
+  delays events. Other failures are retried 6 times (~35 s plus each attempt's own time) and then sent to the DLT.
+- Products whose rows span several merchants or stores fail the ownership check on every event (DLT): check with
+  `SELECT store_product_id FROM inventories GROUP BY 1 HAVING count(DISTINCT merchant_id) > 1 OR count(DISTINCT store_id) > 1`.
 
 ## Adding a use case — checklist
 
 1. **Domain**: rule in the aggregate method; throw a domain exception.
-2. **Port + command**: `application/usecase/<area>/XxxUseCase`, `application/command/XxxCmd` (carry `TenantId`, `StoreId`).
+2. **Port + command**: `application/usecase/<area>/XxxUseCase`, `application/command/XxxCmd` (carry `MerchantId`, `StoreId`).
 3. **Service**: `application/service/XxxService` with `@UseCase` + `@Transactional`. Stock changes through a guarded repository method (see invariants).
 4. **Audit**: write a `StockMovement` with the right `StockMovementType`, `reference_type` and `reference_id` for every quantity change.
 5. **Entry point**: REST controller or a consumer in `infrastructure/message`. Consumers map the external DTO to a command and must be **idempotent** (Kafka delivery is at-least-once).
 6. **Errors**: map in `InventoryExceptionHandler` (extends `oms-core` `GlobalExceptionHandler`).
-7. **Migration**: `src/main/resources/db/migration/V<next>__<what>.sql` (latest is `V1`); every table has `tenant_id`.
+7. **Migration**: `src/main/resources/db/migration/V<next>__<what>.sql` (latest is `V3`); every table has `merchant_id`.
 8. **Tests** mirroring the package: domain, service, adapter, controller/consumer.
 
 ## Tests
@@ -66,9 +106,11 @@ Infra from the `development` repo (Postgres, Kafka, LocalStack with SQS queue + 
 
 ## Known gaps (do not assume these work)
 
-- **`ProductCreatedConsumer` is not idempotent**: a redelivered event hits the unique (store_id, sku) constraint in `saveAllAndFlush` and the consumer throws.
 - **`ReserveStockService` is not idempotent per order item**: replaying the same order reserves twice.
 - **Reserve / confirm / expire do not write `StockMovement`** — only manual adjustment does, so the audit trail is incomplete.
+- Kafka DLT topics (`ProductCreated.DLT`, `ProductUpdated.DLT`) have no alerting and no replay tool; records there are only visible as an ERROR log. SQS `reservation-expire` has no DLQ.
+- The internal `POST /internal/v1/inventory/inventories` (`CreateInventoryService`, no caller today) bypasses the catalog version gate. A row it creates in the product's own merchant/store is corrected by the next `ProductUpdated`; a row in another merchant or store makes every later event of that product go to the DLT. It inserts in request order (not sorted by SKU), so it can deadlock with the sync; Postgres aborts one side and the sync is retried.
+- Reserve does not check inventory `status` yet (INACTIVE is advisory until order-service calls reserve).
 - `ReserveStock` and `ConfirmStockReservation` have no entry point; `OrderCreatedEventConsumer` is commented out; `ReleaseStockReservationUseCase` has no implementation.
-- REST endpoints take no `tenantId` (stores-service uses `/v1/tenants/{tenantId}/...`); `Inventory.validateTenantAndStore` exists but tenant scoping of the API is undecided.
+- REST endpoints take no `merchantId` (stores-service uses `/v1/store/merchants/{merchantId}/...`); `Inventory.validateMerchantAndStore` exists but merchant scoping of the API is undecided.
 - `ProductCreatedEvent` DTO duplicates the producer's class in stores-service — keep them in sync.
