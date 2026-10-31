@@ -113,4 +113,4 @@ Infra from the `development` repo (Postgres, Kafka, LocalStack with SQS queue + 
 - Reserve does not check inventory `status` yet (INACTIVE is advisory until order-service calls reserve).
 - `ReserveStock` and `ConfirmStockReservation` have no entry point; `OrderCreatedEventConsumer` is commented out; `ReleaseStockReservationUseCase` has no implementation.
 - REST endpoints take no `merchantId` (stores-service uses `/v1/store/merchants/{merchantId}/...`); `Inventory.validateMerchantAndStore` exists but merchant scoping of the API is undecided.
-- `ProductCreatedEvent` DTO duplicates the producer's class in stores-service — keep them in sync.
+- `ProductCreatedEvent` and `ProductUpdatedEvent` DTOs duplicate the producer's classes in stores-service — keep both in sync with `oms-workspace/architecture/contracts/events/*.schema.json`.
