@@ -79,15 +79,16 @@ Publishes nothing yet (no outbox table).
 ## Logging (MDC)
 
 - Every log line carries the MDC (`logging.pattern.correlation: "[%X] "`). REST requests get `requestId` (from `X-Request-Id` or
-  generated, echoed in the response) and every `...Id` path variable with a UUID value, set by oms-core
-  (`RequestIdFilter`, `MdcPathVariableInterceptor`).
+  generated, echoed in the response) and the request values listed in `app.logging.mdc.fields` (oms-core `MdcProperties`;
+  defaults: `merchantId`, `storeId`, `productId`, `inventoryId`, `collectionId`, `storeAvailabilityId` as UUID path variables),
+  set by oms-core (`RequestIdFilter`, `MdcRequestFieldsInterceptor`). Add a key in `application.yaml`, not in code.
 - **Every Kafka listener** opens `KafkaMdc.open(record)` first and keeps its whole body inside the scope; after decoding
   it adds `eventId`, `merchantId`, `storeId`, `productId`. The commented-out `OrderCreatedEventConsumer` must do the same when enabled.
   `requestId` = `topic-partition-offset`, the same on every retry; the DLT recoverer (`KafkaErrorHandlingConfig`) reopens
   `KafkaMdc` so the DLT line carries it too. The error handler's own retry lines have no MDC.
 - SQS listeners open an `MdcScope` with `requestId`/`sqsMessageId`; loops over independent units (e.g. expiry per inventory)
   open a nested scope per unit, with the `catch` **inside** the scope (a try-with-resources `catch` runs after `close()`).
-- Only `MdcScope` (and the oms-core filter/interceptor) write the MDC; the domain never does. A new executor or `@Async`
+- In application code only `MdcScope` writes the MDC (the oms-core filter/interceptor manage their own keys); the domain never does. A new executor or `@Async`
   needs a `TaskDecorator` that copies the MDC — there is none today.
 
 ## Adding a use case — checklist
