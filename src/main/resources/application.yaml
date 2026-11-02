@@ -86,6 +86,9 @@ app:
     description: Inventory service REST API
 
 logging:
+  pattern:
+    # MDC (requestId, merchantId, storeId, kafka*/sqs* ...) in front of every line; see oms-core MdcKeys.
+    correlation: "[%X] "
   level:
     root: INFO
     org:

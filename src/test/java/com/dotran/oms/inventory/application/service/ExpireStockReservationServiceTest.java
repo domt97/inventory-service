@@ -13,11 +13,13 @@ import com.dotran.oms.core.domain.id.OrderItemId;
 import com.dotran.oms.core.domain.id.StoreId;
 import com.dotran.oms.core.domain.id.MerchantId;
 import com.dotran.oms.core.exception.NotFoundException;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
+import org.slf4j.MDC;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.Clock;
@@ -28,6 +30,8 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.argThat;
@@ -268,5 +272,57 @@ class ExpireStockReservationServiceTest {
         properties.setBatchSize(batchSize);
         return new ExpireStockReservationService(
                 stockReservationRepository, expireByInventoryTransaction, properties, clock);
+    }
+
+    @Test
+    @DisplayName("each inventory runs with its inventoryId in MDC; the failure line carries it; MDC is empty afterwards")
+    void shouldSetInventoryIdInMdcPerInventory() {
+        ExpireStockReservationService service = serviceWithBatchSize(10);
+        InventoryId failing = InventoryId.of(UUID.randomUUID());
+        InventoryId ok = InventoryId.of(UUID.randomUUID());
+        when(stockReservationRepository.getExpiredReservations(NOW, ExpiryCursor.start(), 10))
+                .thenReturn(List.of(buildReservation(1L, failing), buildReservation(2L, ok)));
+
+        java.util.Map<InventoryId, String> seen = new java.util.HashMap<>();
+        doAnswer(inv -> {
+            InventoryId id = inv.getArgument(0);
+            seen.put(id, MDC.get("inventoryId"));
+            if (id.equals(failing)) {
+                throw new IllegalStateException("db down");
+            }
+            return null;
+        }).when(expireByInventoryTransaction).execute(any(), any());
+
+        ch.qos.logback.classic.Logger logger =
+                (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(ExpireStockReservationService.class);
+        // Logback reads an event's MDC lazily: capture it at log time, while the scope is still open.
+        ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent> appender =
+                new ch.qos.logback.core.read.ListAppender<>() {
+                    @Override
+                    protected void append(ch.qos.logback.classic.spi.ILoggingEvent event) {
+                        event.prepareForDeferredProcessing();
+                        super.append(event);
+                    }
+                };
+        appender.start();
+        logger.addAppender(appender);
+        try {
+            service.execute();
+        } finally {
+            logger.detachAppender(appender);
+        }
+
+        assertEquals(failing.getValue().toString(), seen.get(failing));
+        assertEquals(ok.getValue().toString(), seen.get(ok));
+        ch.qos.logback.classic.spi.ILoggingEvent failure = appender.list.stream()
+                .filter(e -> e.getFormattedMessage().startsWith("Reservation expiry failed"))
+                .findFirst().orElseThrow();
+        assertEquals(failing.getValue().toString(), failure.getMDCPropertyMap().get("inventoryId"));
+        assertNull(MDC.get("inventoryId"));
+    }
+
+    @AfterEach
+    void clearMdc() {
+        MDC.clear();
     }
 }

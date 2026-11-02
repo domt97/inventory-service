@@ -13,6 +13,8 @@ import com.dotran.oms.inventory.domain.enums.ProductStatus;
 import com.dotran.oms.inventory.domain.exception.InvalidCatalogEventException;
 import com.dotran.oms.inventory.infrastructure.message.dto.ProductUpdatedEvent;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.dotran.oms.core.logging.MdcKeys;
+import com.dotran.oms.core.logging.MdcScope;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -38,20 +40,26 @@ public class ProductUpdatedConsumer {
             groupId = "inventory-product-updated"
     )
     public void consume(ConsumerRecord<String, String> record) throws JsonProcessingException {
-        String aggregateId = record.key();
+        try (MdcScope mdc = KafkaMdc.open(record)) {
+            String aggregateId = record.key();
 
-        if (record.value() == null) {
-            log.warn("ProductUpdated event without a value (tombstone): aggregateId={}; ignored", aggregateId);
-            return;
+            if (record.value() == null) {
+                log.warn("ProductUpdated event without a value (tombstone): aggregateId={}; ignored", aggregateId);
+                return;
+            }
+
+            ProductUpdatedEvent event = payloadDecoder.decode(record.value(), ProductUpdatedEvent.class);
+            mdc.put(MdcKeys.EVENT_ID, event.getEventId())
+                    .put(MdcKeys.MERCHANT_ID, event.getMerchantId())
+                    .put(MdcKeys.STORE_ID, event.getStoreId())
+                    .put(MdcKeys.PRODUCT_ID, event.getProductId());
+            log.info("Processing ProductUpdated event: eventId={}, productId={}, version={}",
+                    event.getEventId(), event.getProductId(), event.getVersion());
+
+            syncProductInventoryUseCase.sync(toCmd(event));
+
+            log.info("Finished processing ProductUpdated event: productId={}, version={}", event.getProductId(), event.getVersion());
         }
-
-        ProductUpdatedEvent event = payloadDecoder.decode(record.value(), ProductUpdatedEvent.class);
-        log.info("Processing ProductUpdated event: eventId={}, productId={}, version={}",
-                event.getEventId(), event.getProductId(), event.getVersion());
-
-        syncProductInventoryUseCase.sync(toCmd(event));
-
-        log.info("Finished processing ProductUpdated event: productId={}, version={}", event.getProductId(), event.getVersion());
     }
 
     private SyncProductInventoryCmd toCmd(ProductUpdatedEvent event) {

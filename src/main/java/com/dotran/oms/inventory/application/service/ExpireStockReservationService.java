@@ -1,5 +1,7 @@
 package com.dotran.oms.inventory.application.service;
 
+import com.dotran.oms.core.logging.MdcKeys;
+import com.dotran.oms.core.logging.MdcScope;
 import com.dotran.oms.inventory.application.config.ReservationExpiryProperties;
 import com.dotran.oms.inventory.application.repository.ExpiryCursor;
 import com.dotran.oms.inventory.application.repository.StockReservationRepository;
@@ -84,11 +86,15 @@ public class ExpireStockReservationService implements ExpireStockReservationUseC
         for (Map.Entry<InventoryId, List<StockReservation>> entry : expiredByInventory.entrySet()) {
             InventoryId inventoryId = entry.getKey();
             List<StockReservation> reservations = entry.getValue();
-            try {
-                expireByInventoryTransaction.execute(inventoryId, reservations);
-            } catch (RuntimeException e) {
-                // That inventory's transaction rolled back; its reservations stay RESERVED and are retried next run.
-                log.error("Reservation expiry failed for inventory {}", inventoryId, e);
+            // The catch sits inside the scope so the failure line still carries inventoryId.
+            try (MdcScope mdc = MdcScope.open()) {
+                mdc.put(MdcKeys.INVENTORY_ID, inventoryId.getValue());
+                try {
+                    expireByInventoryTransaction.execute(inventoryId, reservations);
+                } catch (RuntimeException e) {
+                    // That inventory's transaction rolled back; its reservations stay RESERVED and are retried next run.
+                    log.error("Reservation expiry failed for inventory {}", inventoryId, e);
+                }
             }
         }
     }

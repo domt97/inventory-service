@@ -14,18 +14,22 @@ import com.dotran.oms.inventory.domain.exception.InvalidCatalogEventException;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.slf4j.MDC;
 import org.springframework.http.converter.json.Jackson2ObjectMapperBuilder;
 
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
@@ -111,5 +115,32 @@ class ProductUpdatedConsumerTest {
         consumer().consume(new ConsumerRecord<>("ProductUpdated", 0, 0L, "key", null));
 
         verifyNoInteractions(syncProductInventoryUseCase);
+    }
+
+    @Test
+    @DisplayName("MDC carries record coordinates and event ids while syncing; empty afterwards and after a contract error")
+    void setsAndClearsMdc() throws Exception {
+        java.util.Map<String, String> seen = new java.util.HashMap<>();
+        doAnswer(inv -> {
+            seen.putAll(MDC.getCopyOfContextMap());
+            return null;
+        }).when(syncProductInventoryUseCase).sync(any());
+
+        consumer().consume(record("\"ACTIVE\"", "[]"));
+
+        assertThat(seen).containsEntry("requestId", "ProductUpdated-0-0")
+                .containsEntry("merchantId", merchantId.toString())
+                .containsEntry("storeId", storeId.toString())
+                .containsEntry("productId", productId.toString())
+                .containsKey("eventId");
+        assertThat(MDC.getCopyOfContextMap()).isNullOrEmpty();
+
+        assertThatThrownBy(() -> consumer().consume(record("\"ARCHIVED\"", "[]"))).isInstanceOf(InvalidCatalogEventException.class);
+        assertThat(MDC.getCopyOfContextMap()).isNullOrEmpty();
+    }
+
+    @AfterEach
+    void clearMdc() {
+        MDC.clear();
     }
 }
