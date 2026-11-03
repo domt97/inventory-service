@@ -1,5 +1,8 @@
 package com.dotran.oms.inventory.infrastructure.config;
 
+import com.dotran.oms.core.logging.LogSanitizer;
+import com.dotran.oms.core.logging.MdcScope;
+import com.dotran.oms.inventory.infrastructure.message.KafkaMdc;
 import com.dotran.oms.inventory.domain.exception.CatalogOwnershipMismatchException;
 import com.dotran.oms.inventory.domain.exception.InvalidCatalogEventException;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -45,9 +48,13 @@ public class KafkaErrorHandlingConfig {
 
     static DefaultErrorHandler errorHandler(ConsumerRecordRecoverer deadLetter, ExponentialBackOffWithMaxRetries backOff) {
         ConsumerRecordRecoverer recoverer = (record, exception) -> {
-            log.error("Sending {} record key={} offset={} to {}{}: {}", record.topic(), record.key(), record.offset(),
-                    record.topic(), DLT_SUFFIX, exception.getMessage(), exception);
-            deadLetter.accept(record, exception);
+            // Runs on the listener thread after the listener's own scope closed: reopen it for the DLT line.
+            try (MdcScope mdc = KafkaMdc.open(record)) {
+                log.error("Sending {} record key={} partition={} offset={} to {}{}: {}", record.topic(), record.key(),
+                        record.partition(), record.offset(), record.topic(), DLT_SUFFIX,
+                        LogSanitizer.escape(exception.getMessage()), exception);
+                deadLetter.accept(record, exception);
+            }
         };
         DefaultErrorHandler handler = new DefaultErrorHandler(recoverer, backOff);
         handler.setBackOffFunction((record, exception) -> isConnectionFailure(exception) ? connectionFailureBackOff() : null);

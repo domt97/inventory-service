@@ -4,13 +4,17 @@ import com.dotran.oms.inventory.application.config.ReservationExpiryProperties;
 import com.dotran.oms.inventory.application.usecase.reservation.ExpireStockReservationUseCase;
 import io.awspring.cloud.sqs.annotation.SqsListener;
 import io.awspring.cloud.sqs.listener.SqsHeaders;
+import com.dotran.oms.core.logging.MdcKeys;
+import com.dotran.oms.core.logging.MdcScope;
 import lombok.extern.slf4j.Slf4j;
+import software.amazon.awssdk.services.sqs.model.Message;
 import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.stereotype.Component;
 
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -45,7 +49,18 @@ public class SqsReservationExpireConsumer {
             messageVisibilitySeconds = ReservationExpiryProperties.LISTENER_VISIBILITY_SECONDS)
     public void consume(String message,
                         @Header(name = SqsHeaders.MessageSystemAttributes.SQS_SENT_TIMESTAMP, required = false)
-                        String sentTimestamp) {
+                        String sentTimestamp,
+                        // The raw SQS message: its messageId is the same on every redelivery of the tick.
+                        @Header(name = SqsHeaders.SQS_SOURCE_DATA_HEADER, required = false) Message sqsMessage) {
+        String messageId = sqsMessage != null ? sqsMessage.messageId() : null;
+        String tickId = messageId != null ? messageId : UUID.randomUUID().toString();
+        try (MdcScope mdc = MdcScope.open()) {
+            mdc.put(MdcKeys.REQUEST_ID, tickId).put(MdcKeys.SQS_MESSAGE_ID, messageId);
+            handle(sentTimestamp);
+        }
+    }
+
+    private void handle(String sentTimestamp) {
         Instant now = clock.instant();
         Duration age = tickAge(sentTimestamp, now);
 

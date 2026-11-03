@@ -13,18 +13,23 @@ import com.dotran.oms.inventory.domain.enums.ProductStatus;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.slf4j.MDC;
 import org.springframework.http.converter.json.Jackson2ObjectMapperBuilder;
 
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
@@ -110,5 +115,49 @@ class ProductCreatedConsumerTest {
                 .isInstanceOf(JsonProcessingException.class);
 
         verifyNoInteractions(syncProductInventoryUseCase);
+    }
+
+    @Test
+    @DisplayName("MDC carries record coordinates and event ids while syncing, and is empty afterwards")
+    void setsMdcWhileSyncing() throws Exception {
+        UUID merchantId = UUID.randomUUID(), storeId = UUID.randomUUID(), productId = UUID.randomUUID();
+        java.util.Map<String, String> seen = new java.util.HashMap<>();
+        doAnswer(inv -> {
+            seen.putAll(MDC.getCopyOfContextMap());
+            return null;
+        }).when(syncProductInventoryUseCase).sync(any());
+
+        consumer().consume(record(productId, event(merchantId, storeId, productId, "[{\"value\":\"A\"}]", "")));
+
+        assertThat(seen).containsEntry("requestId", "ProductCreated-0-0")
+                .containsEntry("kafkaTopic", "ProductCreated")
+                .containsEntry("kafkaPartition", "0")
+                .containsEntry("kafkaOffset", "0")
+                .containsEntry("merchantId", merchantId.toString())
+                .containsEntry("storeId", storeId.toString())
+                .containsEntry("productId", productId.toString())
+                .containsKey("eventId");
+        assertThat(MDC.getCopyOfContextMap()).isNullOrEmpty();
+    }
+
+    @Test
+    @DisplayName("MDC is empty after the sync fails and after an unreadable payload")
+    void clearsMdcOnFailure() throws Exception {
+        UUID productId = UUID.randomUUID();
+        doThrow(new IllegalStateException("db down")).when(syncProductInventoryUseCase).sync(any());
+
+        assertThatThrownBy(() -> consumer().consume(record(productId,
+                event(UUID.randomUUID(), UUID.randomUUID(), productId, "[{\"value\":\"A\"}]", ""))))
+                .isInstanceOf(IllegalStateException.class);
+        assertThat(MDC.getCopyOfContextMap()).isNullOrEmpty();
+
+        assertThatThrownBy(() -> consumer().consume(new ConsumerRecord<>("ProductCreated", 0, 1L, "key", "\"not json")))
+                .isInstanceOf(Exception.class);
+        assertThat(MDC.getCopyOfContextMap()).isNullOrEmpty();
+    }
+
+    @AfterEach
+    void clearMdc() {
+        MDC.clear();
     }
 }
