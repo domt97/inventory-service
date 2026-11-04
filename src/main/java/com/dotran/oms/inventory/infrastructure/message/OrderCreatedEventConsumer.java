@@ -11,7 +11,7 @@ import org.springframework.stereotype.Component;
 @Slf4j
 public class OrderCreatedEventConsumer {
 
-    // When enabled: wrap the body in KafkaMdc.open(record) like the other listeners (see CLAUDE.md, Logging).
+    // When enabled: wrap the body in KafkaMdc.open(record, mdcPropagation) like the other listeners (see CLAUDE.md, Logging).
 //    @KafkaListener(
 //            topics = "OrderCreated",
 //            groupId = "order-consumer"

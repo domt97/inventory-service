@@ -12,6 +12,7 @@ import com.dotran.oms.core.domain.id.StoreId;
 import com.dotran.oms.core.domain.id.MerchantId;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.dotran.oms.core.logging.MdcKeys;
+import com.dotran.oms.core.logging.MdcPropagation;
 import com.dotran.oms.core.logging.MdcScope;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -30,13 +31,14 @@ public class ProductCreatedConsumer {
 
     private final OutboxPayloadDecoder payloadDecoder;
     private final SyncProductInventoryUseCase syncProductInventoryUseCase;
+    private final MdcPropagation mdcPropagation;
 
     @KafkaListener(
             topics = "ProductCreated",
             groupId = "product-consumer"
     )
     public void consume(ConsumerRecord<String, String> record) throws JsonProcessingException {
-        try (MdcScope mdc = KafkaMdc.open(record)) {
+        try (MdcScope mdc = KafkaMdc.open(record, mdcPropagation)) {
             String aggregateId = record.key();
             log.info("Received ProductCreated event: aggregateId={}", aggregateId);
 

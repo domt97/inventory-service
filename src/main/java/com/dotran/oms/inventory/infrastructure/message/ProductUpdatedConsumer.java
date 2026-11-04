@@ -14,6 +14,7 @@ import com.dotran.oms.inventory.domain.exception.InvalidCatalogEventException;
 import com.dotran.oms.inventory.infrastructure.message.dto.ProductUpdatedEvent;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.dotran.oms.core.logging.MdcKeys;
+import com.dotran.oms.core.logging.MdcPropagation;
 import com.dotran.oms.core.logging.MdcScope;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -34,13 +35,14 @@ public class ProductUpdatedConsumer {
 
     private final OutboxPayloadDecoder payloadDecoder;
     private final SyncProductInventoryUseCase syncProductInventoryUseCase;
+    private final MdcPropagation mdcPropagation;
 
     @KafkaListener(
             topics = "ProductUpdated",
             groupId = "inventory-product-updated"
     )
     public void consume(ConsumerRecord<String, String> record) throws JsonProcessingException {
-        try (MdcScope mdc = KafkaMdc.open(record)) {
+        try (MdcScope mdc = KafkaMdc.open(record, mdcPropagation)) {
             String aggregateId = record.key();
 
             if (record.value() == null) {

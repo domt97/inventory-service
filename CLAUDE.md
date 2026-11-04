@@ -82,10 +82,14 @@ Publishes nothing yet (no outbox table).
   generated, echoed in the response) and the request values listed in `app.logging.mdc.fields` (oms-core `MdcProperties`;
   defaults: `merchantId`, `storeId`, `productId`, `inventoryId`, `collectionId`, `storeAvailabilityId` as UUID path variables),
   set by oms-core (`RequestIdFilter`, `MdcRequestFieldsInterceptor`). Add a key in `application.yaml`, not in code.
-- **Every Kafka listener** opens `KafkaMdc.open(record)` first and keeps its whole body inside the scope; after decoding
-  it adds `eventId`, `merchantId`, `storeId`, `productId`. The commented-out `OrderCreatedEventConsumer` must do the same when enabled.
-  `requestId` = `topic-partition-offset`, the same on every retry; the DLT recoverer (`KafkaErrorHandlingConfig`) reopens
-  `KafkaMdc` so the DLT line carries it too. The error handler's own retry lines have no MDC.
+- **Every Kafka listener** opens `KafkaMdc.open(record, mdcPropagation)` first and keeps its whole body inside the scope;
+  after decoding it adds `eventId`, `merchantId`, `storeId`, `productId` (always from the payload; the header carries
+  correlation keys only). The
+  commented-out `OrderCreatedEventConsumer` must do the same when enabled. `requestId` comes from the producer's
+  `correlationContext` header (oms-core `MdcPropagation.restore`, validated; ADR 0004), so one id covers the whole flow
+  from the browser's `X-Request-Id`; without a valid header it is `topic-partition-offset`. Either way it is the same on
+  every retry; the DLT recoverer (`KafkaErrorHandlingConfig`) reopens `KafkaMdc` so the DLT line carries it too. The
+  error handler's own retry lines have no MDC. Tests use a real `MdcPropagation` (`support/TestMdc`), not a mock.
 - SQS listeners open an `MdcScope` with `requestId`/`sqsMessageId`; loops over independent units (e.g. expiry per inventory)
   open a nested scope per unit, with the `catch` **inside** the scope (a try-with-resources `catch` runs after `close()`).
 - In application code only `MdcScope` writes the MDC (the oms-core filter/interceptor manage their own keys); the domain never does. A new executor or `@Async`

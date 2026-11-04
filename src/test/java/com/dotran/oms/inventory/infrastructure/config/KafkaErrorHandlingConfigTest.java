@@ -1,5 +1,6 @@
 package com.dotran.oms.inventory.infrastructure.config;
 
+import com.dotran.oms.inventory.support.TestMdc;
 import com.dotran.oms.inventory.domain.exception.CatalogOwnershipMismatchException;
 import com.dotran.oms.inventory.domain.exception.InvalidCatalogEventException;
 import com.fasterxml.jackson.core.JsonParseException;
@@ -42,7 +43,7 @@ class KafkaErrorHandlingConfigTest {
         ExponentialBackOffWithMaxRetries backOff = KafkaErrorHandlingConfig.backOff();
         backOff.setInitialInterval(1L);
         backOff.setMaxInterval(1L);
-        return KafkaErrorHandlingConfig.errorHandler(deadLetter, backOff);
+        return KafkaErrorHandlingConfig.errorHandler(deadLetter, backOff, TestMdc.propagation());
     }
 
     /** Wraps like the listener container does, so classification has to look at the cause. */
@@ -92,7 +93,7 @@ class KafkaErrorHandlingConfigTest {
     @Test
     @DisplayName("a database connection failure is retried without limit (never sent to the dead-letter topic)")
     void connectionFailure_neverRecovered() {
-        DefaultErrorHandler handler = KafkaErrorHandlingConfig.errorHandler(deadLetter, KafkaErrorHandlingConfig.backOff());
+        DefaultErrorHandler handler = KafkaErrorHandlingConfig.errorHandler(deadLetter, KafkaErrorHandlingConfig.backOff(), TestMdc.propagation());
         handler.setBackOffFunction((r, e) -> KafkaErrorHandlingConfig.isConnectionFailure(e) ? new FixedBackOff(0L, FixedBackOff.UNLIMITED_ATTEMPTS) : null);
         Exception failure = wrapped(new CannotCreateTransactionException("db down", new CannotGetJdbcConnectionException("refused")));
 
@@ -124,5 +125,27 @@ class KafkaErrorHandlingConfigTest {
         assertThat(backOff.getInitialInterval()).isEqualTo(1_000L);
         assertThat(backOff.getMultiplier()).isEqualTo(2.0);
         assertThat(backOff.getMaxInterval()).isEqualTo(10_000L);
+    }
+
+    @Test
+    @DisplayName("the DLT recoverer logs under the header's requestId and clears the MDC afterwards")
+    void deadLetterCarriesHeaderRequestId() {
+        ConsumerRecord<String, String> withHeader = new ConsumerRecord<>("ProductUpdated", 0, 43L, "key", "value");
+        withHeader.headers().add(com.dotran.oms.core.logging.MdcPropagation.HEADER, TestMdc.header("{\"requestId\":\"web-abc\"}"));
+        java.util.concurrent.atomic.AtomicReference<String> seen = new java.util.concurrent.atomic.AtomicReference<>();
+        org.mockito.Mockito.doAnswer(inv -> {
+            seen.set(org.slf4j.MDC.get("requestId"));
+            return null;
+        }).when(deadLetter).accept(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+
+        handler().handleOne(wrapped(new InvalidCatalogEventException("bad event")), withHeader, consumer, container);
+
+        assertThat(seen.get()).isEqualTo("web-abc");
+        assertThat(org.slf4j.MDC.getCopyOfContextMap()).isNullOrEmpty();
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void clearMdc() {
+        org.slf4j.MDC.clear();
     }
 }

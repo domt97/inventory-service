@@ -1,5 +1,6 @@
 package com.dotran.oms.inventory.infrastructure.message;
 
+import com.dotran.oms.inventory.support.TestMdc;
 import com.dotran.oms.core.domain.id.MerchantId;
 import com.dotran.oms.core.domain.id.ProductId;
 import com.dotran.oms.core.domain.id.SKU;
@@ -43,7 +44,7 @@ class ProductCreatedConsumerTest {
     private SyncProductInventoryUseCase syncProductInventoryUseCase;
 
     private ProductCreatedConsumer consumer() {
-        return new ProductCreatedConsumer(new OutboxPayloadDecoder(objectMapper), syncProductInventoryUseCase);
+        return new ProductCreatedConsumer(new OutboxPayloadDecoder(objectMapper), syncProductInventoryUseCase, TestMdc.propagation());
     }
 
     /** Kafka value as Debezium EventRouter publishes it: a JSON string containing the event JSON. */
@@ -159,5 +160,51 @@ class ProductCreatedConsumerTest {
     @AfterEach
     void clearMdc() {
         MDC.clear();
+    }
+
+    @Test
+    @DisplayName("correlationContext header: requestId is the producer's during sync; a header merchantId is ignored; a broken header is still processed")
+    void headerRequestId() throws Exception {
+        UUID merchantId = UUID.randomUUID(), storeId = UUID.randomUUID(), productId = UUID.randomUUID();
+        java.util.List<java.util.Map<String, String>> seen = new java.util.ArrayList<>();
+        doAnswer(inv -> {
+            seen.add(MDC.getCopyOfContextMap());
+            return null;
+        }).when(syncProductInventoryUseCase).sync(any());
+
+        ConsumerRecord<String, String> withHeader = record(productId, event(merchantId, storeId, productId, "[{\"value\":\"A\"}]", ""));
+        withHeader.headers().add(com.dotran.oms.core.logging.MdcPropagation.HEADER,
+                TestMdc.header("{\"requestId\":\"web-abc\",\"merchantId\":\"" + UUID.randomUUID() + "\"}"));
+        consumer().consume(withHeader);
+
+        ConsumerRecord<String, String> broken = record(productId, event(merchantId, storeId, productId, "[{\"value\":\"A\"}]", ""));
+        broken.headers().add(com.dotran.oms.core.logging.MdcPropagation.HEADER, TestMdc.header("{not json"));
+        consumer().consume(broken);
+
+        assertThat(seen).hasSize(2);
+        assertThat(seen.get(0)).containsEntry("requestId", "web-abc").containsEntry("merchantId", merchantId.toString());
+        assertThat(seen.get(1)).containsEntry("requestId", "ProductCreated-0-0");
+        assertThat(MDC.getCopyOfContextMap()).isNullOrEmpty();
+    }
+
+    @Test
+    @DisplayName("an undecodable payload with a valid header: requestId from the header while failing, nothing left after")
+    void headerWithBrokenPayload() {
+        java.util.concurrent.atomic.AtomicReference<String> seen = new java.util.concurrent.atomic.AtomicReference<>();
+        OutboxPayloadDecoder decoder = new OutboxPayloadDecoder(objectMapper) {
+            @Override
+            public <T> T decode(String value, Class<T> type) throws JsonProcessingException {
+                seen.set(MDC.get("requestId"));
+                return super.decode(value, type);
+            }
+        };
+        ConsumerRecord<String, String> record = new ConsumerRecord<>("ProductCreated", 0, 3L, "key", "\"not json");
+        record.headers().add(com.dotran.oms.core.logging.MdcPropagation.HEADER, TestMdc.header("{\"requestId\":\"web-abc\"}"));
+
+        assertThatThrownBy(() -> new ProductCreatedConsumer(decoder, syncProductInventoryUseCase, TestMdc.propagation()).consume(record))
+                .isInstanceOf(Exception.class);
+
+        assertThat(seen.get()).isEqualTo("web-abc");
+        assertThat(MDC.getCopyOfContextMap()).isNullOrEmpty();
     }
 }

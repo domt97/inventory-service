@@ -1,5 +1,6 @@
 package com.dotran.oms.inventory.infrastructure.message;
 
+import com.dotran.oms.inventory.support.TestMdc;
 import com.dotran.oms.core.domain.id.MerchantId;
 import com.dotran.oms.core.domain.id.ProductId;
 import com.dotran.oms.core.domain.id.SKU;
@@ -47,7 +48,7 @@ class ProductUpdatedConsumerTest {
     private final UUID productId = UUID.randomUUID();
 
     private ProductUpdatedConsumer consumer() {
-        return new ProductUpdatedConsumer(new OutboxPayloadDecoder(objectMapper), syncProductInventoryUseCase);
+        return new ProductUpdatedConsumer(new OutboxPayloadDecoder(objectMapper), syncProductInventoryUseCase, TestMdc.propagation());
     }
 
     private ConsumerRecord<String, String> record(String status, String skus) throws JsonProcessingException {
@@ -142,5 +143,23 @@ class ProductUpdatedConsumerTest {
     @AfterEach
     void clearMdc() {
         MDC.clear();
+    }
+
+    @Test
+    @DisplayName("correlationContext header sets requestId during sync; without it the record coordinates are used")
+    void headerRequestId() throws Exception {
+        java.util.List<String> seen = new java.util.ArrayList<>();
+        doAnswer(inv -> {
+            seen.add(MDC.get("requestId"));
+            return null;
+        }).when(syncProductInventoryUseCase).sync(any());
+
+        ConsumerRecord<String, String> withHeader = record("\"ACTIVE\"", "[]");
+        withHeader.headers().add(com.dotran.oms.core.logging.MdcPropagation.HEADER, TestMdc.header("{\"requestId\":\"web-upd\"}"));
+        consumer().consume(withHeader);
+        consumer().consume(record("\"ACTIVE\"", "[]"));
+
+        assertThat(seen).containsExactly("web-upd", "ProductUpdated-0-0");
+        assertThat(MDC.getCopyOfContextMap()).isNullOrEmpty();
     }
 }
