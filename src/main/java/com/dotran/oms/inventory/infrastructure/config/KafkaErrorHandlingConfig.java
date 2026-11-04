@@ -1,6 +1,7 @@
 package com.dotran.oms.inventory.infrastructure.config;
 
 import com.dotran.oms.core.logging.LogSanitizer;
+import com.dotran.oms.core.logging.MdcPropagation;
 import com.dotran.oms.core.logging.MdcScope;
 import com.dotran.oms.inventory.infrastructure.message.KafkaMdc;
 import com.dotran.oms.inventory.domain.exception.CatalogOwnershipMismatchException;
@@ -39,17 +40,18 @@ public class KafkaErrorHandlingConfig {
     static final long CONNECTION_FAILURE_MAX_INTERVAL_MS = 60_000L;
 
     @Bean
-    public DefaultErrorHandler kafkaErrorHandler(KafkaOperations<?, ?> kafkaTemplate) {
+    public DefaultErrorHandler kafkaErrorHandler(KafkaOperations<?, ?> kafkaTemplate, MdcPropagation mdcPropagation) {
         DeadLetterPublishingRecoverer deadLetter = new DeadLetterPublishingRecoverer(kafkaTemplate,
                 // partition -1: let Kafka pick one, the DLT may have fewer partitions than the source topic
                 (record, exception) -> new TopicPartition(record.topic() + DLT_SUFFIX, -1));
-        return errorHandler(deadLetter, backOff());
+        return errorHandler(deadLetter, backOff(), mdcPropagation);
     }
 
-    static DefaultErrorHandler errorHandler(ConsumerRecordRecoverer deadLetter, ExponentialBackOffWithMaxRetries backOff) {
+    static DefaultErrorHandler errorHandler(ConsumerRecordRecoverer deadLetter, ExponentialBackOffWithMaxRetries backOff,
+                                            MdcPropagation mdcPropagation) {
         ConsumerRecordRecoverer recoverer = (record, exception) -> {
             // Runs on the listener thread after the listener's own scope closed: reopen it for the DLT line.
-            try (MdcScope mdc = KafkaMdc.open(record)) {
+            try (MdcScope mdc = KafkaMdc.open(record, mdcPropagation)) {
                 log.error("Sending {} record key={} partition={} offset={} to {}{}: {}", record.topic(), record.key(),
                         record.partition(), record.offset(), record.topic(), DLT_SUFFIX,
                         LogSanitizer.escape(exception.getMessage()), exception);
