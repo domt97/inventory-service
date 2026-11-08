@@ -25,6 +25,8 @@ import com.dotran.oms.inventory.domain.enums.StockMovementType;
 import com.dotran.oms.inventory.domain.exception.InvalidReservationStateException;
 import com.dotran.oms.inventory.domain.exception.InvalidStockCommandException;
 import com.dotran.oms.inventory.domain.exception.StockCommandOwnershipMismatchException;
+import com.dotran.oms.inventory.domain.enums.OrderRejectionReason;
+import com.dotran.oms.inventory.domain.model.ReservationRejection;
 import com.dotran.oms.inventory.domain.model.StockReservationOrder;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -103,7 +105,9 @@ class ReleaseStockReservationServiceTest {
     }
 
     private StockReservationOrder header(OrderReservationStatus status, Boolean restock) {
-        return new StockReservationOrder(orderId, merchantId, storeId, status, restock, null);
+        ReservationRejection rejection = status == OrderReservationStatus.REJECTED
+                ? ReservationRejection.ofOrder(OrderRejectionReason.STALE_COMMAND) : null;
+        return new StockReservationOrder(orderId, merchantId, storeId, status, restock, rejection);
     }
 
     private void existingHeader(OrderReservationStatus status, Boolean restock) {

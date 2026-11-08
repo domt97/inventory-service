@@ -15,7 +15,11 @@ import java.util.UUID;
  */
 public interface SpringDataStockReservationOrderRepository extends JpaRepository<StockReservationOrderEntity, UUID> {
 
-    /** 1 if the header was created, 0 if one already existed (any merchant/store). A new header has no rejection. */
+    /**
+     * 1 if the header was created, 0 if one already existed (any merchant/store). A new header has no rejection.
+     * The proposed row must satisfy the V4 CHECKs: Postgres evaluates them before {@code ON CONFLICT}, so an invalid
+     * row fails with a constraint violation even when the order already has a header (the domain record enforces them).
+     */
     @Modifying
     @Query(value = """
         INSERT INTO stock_reservation_orders (order_id, merchant_id, store_id, status, restock, created_at, updated_at)

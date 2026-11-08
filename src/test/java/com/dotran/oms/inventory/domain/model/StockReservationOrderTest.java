@@ -24,8 +24,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class StockReservationOrderTest {
 
     private StockReservationOrder header(OrderReservationStatus status, Boolean restock) {
+        ReservationRejection rejection = status == OrderReservationStatus.REJECTED
+                ? ReservationRejection.ofOrder(OrderRejectionReason.STALE_COMMAND) : null;
         return new StockReservationOrder(OrderId.of(UUID.randomUUID()), MerchantId.of(UUID.randomUUID()),
-                StoreId.of(UUID.randomUUID()), status, restock, null);
+                StoreId.of(UUID.randomUUID()), status, restock, rejection);
     }
 
     @Test
@@ -42,6 +44,23 @@ class StockReservationOrderTest {
     void firstRelease() {
         assertTrue(header(OrderReservationStatus.CANCELLED, null).isFirstRelease());
         assertFalse(header(OrderReservationStatus.CANCELLED, false).isFirstRelease());
+    }
+
+    @Test
+    @DisplayName("the header enforces the V4 CHECKs: REJECTED needs a rejection, restock only on a closed header")
+    void headerInvariants() {
+        assertThrows(IllegalArgumentException.class, () -> new StockReservationOrder(OrderId.of(UUID.randomUUID()),
+                MerchantId.of(UUID.randomUUID()), StoreId.of(UUID.randomUUID()), OrderReservationStatus.REJECTED,
+                null, null));
+        for (OrderReservationStatus open : new OrderReservationStatus[]{OrderReservationStatus.RESERVED,
+                OrderReservationStatus.CONFIRMED}) {
+            assertThrows(IllegalArgumentException.class, () -> header(open, true), open.name());
+            assertThrows(IllegalArgumentException.class, () -> header(open, false), open.name());
+        }
+        assertThrows(IllegalArgumentException.class, () -> new StockReservationOrder(OrderId.of(UUID.randomUUID()),
+                MerchantId.of(UUID.randomUUID()), StoreId.of(UUID.randomUUID()), null, null, null));
+        assertTrue(header(OrderReservationStatus.CANCELLED, true).restock());
+        assertFalse(header(OrderReservationStatus.REJECTED, false).restock());
     }
 
     @Test
