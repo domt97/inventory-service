@@ -16,6 +16,12 @@ public interface SpringDataInventoryRepository extends JpaRepository<InventoryEn
 
     List<InventoryEntity> findAllByStoreIdAndSkuIn(UUID storeId, Collection<String> skus);
 
+    List<InventoryEntity> findAllByMerchantIdAndStoreIdAndSkuIn(UUID merchantId, UUID storeId, Collection<String> skus);
+
+    /**
+     * Guarded reserve (BR-INV-08, no oversell): only an ACTIVE row of the merchant's store with enough available stock.
+     * Status stays a literal; 0 rows = refused.
+     */
     @Modifying
     @Query(value = """
         UPDATE inventories
@@ -23,10 +29,32 @@ public interface SpringDataInventoryRepository extends JpaRepository<InventoryEn
             reserved_quantity = reserved_quantity + :quantity,
             updated_at = CURRENT_TIMESTAMP
         WHERE id = :inventoryId
+          AND merchant_id = :merchantId
+          AND store_id = :storeId
+          AND status = 'ACTIVE'
           AND (quantity - reserved_quantity) >= :quantity
         """, nativeQuery = true)
     int reserve(@Param("inventoryId") UUID inventoryId,
+                @Param("merchantId") UUID merchantId,
+                @Param("storeId") UUID storeId,
                 @Param("quantity") long quantity);
+
+    /** Status and available quantity read past the persistence context (callers never pass an empty list). */
+    @Query(value = """
+        SELECT id AS id, status AS status, (quantity - reserved_quantity) AS available
+        FROM inventories
+        WHERE id IN (:ids)
+        """, nativeQuery = true)
+    List<StockStateView> findStockStates(@Param("ids") Collection<UUID> ids);
+
+    /** Projection of {@link #findStockStates}. */
+    interface StockStateView {
+        UUID getId();
+
+        String getStatus();
+
+        Long getAvailable();
+    }
 
     @Modifying
     @Query(value = """

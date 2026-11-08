@@ -4,6 +4,8 @@ import com.dotran.oms.core.exception.ValidationException;
 import com.dotran.oms.inventory.domain.enums.InventoryStatus;
 import com.dotran.oms.inventory.domain.enums.StockMovementType;
 import com.dotran.oms.inventory.domain.exception.InsufficientStockException;
+import com.dotran.oms.inventory.domain.exception.InvalidMovementTypeException;
+import com.dotran.oms.inventory.domain.exception.InventoryNotOrderableException;
 import com.dotran.oms.inventory.domain.exception.InvalidQuantityException;
 import com.dotran.oms.inventory.domain.exception.InvalidReservationException;
 import com.dotran.oms.core.domain.id.InventoryId;
@@ -15,6 +17,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.util.UUID;
 
@@ -39,6 +43,10 @@ class InventoryTest {
     }
 
     private Inventory buildInventory(long quantity, long reservedQuantity) {
+        return buildInventory(quantity, reservedQuantity, InventoryStatus.ACTIVE);
+    }
+
+    private Inventory buildInventory(long quantity, long reservedQuantity, InventoryStatus status) {
         return Inventory.builder()
                 .id(InventoryId.of(INVENTORY_UUID))
                 .merchantId(merchantId)
@@ -47,7 +55,7 @@ class InventoryTest {
                 .sku(SKU.of("SKU-001"))
                 .quantity(quantity)
                 .reservedQuantity(reservedQuantity)
-                .status(InventoryStatus.ACTIVE)
+                .status(status)
                 .build();
     }
 
@@ -124,6 +132,23 @@ class InventoryTest {
             Inventory inventory = buildInventory(100L, 0L);
 
             assertThrows(InvalidQuantityException.class, () -> inventory.reserve(-10L));
+        }
+
+        @Test
+        @DisplayName("throws InventoryNotOrderableException when INACTIVE, even with enough stock (BR-INV-08)")
+        void shouldThrowWhenInactive() {
+            Inventory inventory = buildInventory(100L, 0L, InventoryStatus.INACTIVE);
+
+            assertThrows(InventoryNotOrderableException.class, () -> inventory.reserve(1L));
+            assertEquals(0L, inventory.getReservedQuantity());
+        }
+
+        @Test
+        @DisplayName("reports NOT_ORDERABLE before INSUFFICIENT_STOCK: INACTIVE without stock is not orderable")
+        void shouldCheckStatusBeforeStock() {
+            Inventory inventory = buildInventory(0L, 0L, InventoryStatus.INACTIVE);
+
+            assertThrows(InventoryNotOrderableException.class, () -> inventory.reserve(5L));
         }
     }
 
@@ -252,6 +277,45 @@ class InventoryTest {
             assertThrows(InvalidQuantityException.class,
                     () -> inventory.adjust(StockMovementType.ADJUSTMENT_IN, 0L));
         }
+
+        @ParameterizedTest
+        @EnumSource(value = StockMovementType.class, names = {"RESERVE", "RESERVE_RELEASE", "RESERVE_EXPIRE"})
+        @DisplayName("refuses the order hold types (BR-INV-05) and changes nothing")
+        void shouldRefuseHoldTypes(StockMovementType type) {
+            Inventory inventory = buildInventory(100L, 20L);
+
+            assertThrows(InvalidMovementTypeException.class, () -> inventory.adjust(type, 5L));
+            assertEquals(100L, inventory.getQuantity());
+            assertEquals(20L, inventory.getReservedQuantity());
+        }
+
+        @Test
+        @DisplayName("refuses a null type")
+        void shouldRefuseNullType() {
+            Inventory inventory = buildInventory(100L, 0L);
+
+            assertThrows(InvalidMovementTypeException.class, () -> inventory.adjust(null, 5L));
+        }
+
+        @Test
+        @DisplayName("SALE is still a manual stock-out (BR-INV-05)")
+        void shouldAllowManualSale() {
+            Inventory inventory = buildInventory(100L, 0L);
+
+            inventory.adjust(StockMovementType.SALE, 10L);
+
+            assertEquals(90L, inventory.getQuantity());
+        }
+
+        @Test
+        @DisplayName("is allowed on an INACTIVE row (BR-INV-10)")
+        void shouldAllowAdjustWhenInactive() {
+            Inventory inventory = buildInventory(10L, 0L, InventoryStatus.INACTIVE);
+
+            inventory.adjust(StockMovementType.RECEIVE, 5L);
+
+            assertEquals(15L, inventory.getQuantity());
+        }
     }
 
     @Nested
@@ -292,7 +356,7 @@ class InventoryTest {
     class Init {
 
         @Test
-        @DisplayName("sets quantity and reservedQuantity to zero with ACTIVE status")
+        @DisplayName("sets quantity and reservedQuantity to zero with INACTIVE status (support-created row)")
         void shouldInitializeWithDefaults() {
             Inventory inventory = Inventory.builder()
                     .merchantId(merchantId)
@@ -305,7 +369,7 @@ class InventoryTest {
 
             assertEquals(0L, inventory.getQuantity());
             assertEquals(0L, inventory.getReservedQuantity());
-            assertEquals(InventoryStatus.ACTIVE, inventory.getStatus());
+            assertEquals(InventoryStatus.INACTIVE, inventory.getStatus());
             assertNotNull(inventory.getCreatedAt());
             assertNotNull(inventory.getUpdatedAt());
         }

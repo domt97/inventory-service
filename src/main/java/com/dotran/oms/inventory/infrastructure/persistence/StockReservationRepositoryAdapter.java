@@ -1,6 +1,7 @@
 package com.dotran.oms.inventory.infrastructure.persistence;
 
 import com.dotran.oms.inventory.application.repository.ExpiryCursor;
+import com.dotran.oms.inventory.application.repository.ReservationLineView;
 import com.dotran.oms.inventory.application.repository.StockReservationRepository;
 import com.dotran.oms.inventory.common.id.StockReservationId;
 import com.dotran.oms.inventory.domain.enums.ReservationStatus;
@@ -9,12 +10,19 @@ import com.dotran.oms.inventory.infrastructure.mapper.StockReservationPersistenc
 import com.dotran.oms.inventory.infrastructure.persistence.entity.StockReservationEntity;
 import com.dotran.oms.inventory.infrastructure.persistence.jpa.SpringDataStockReservationRepository;
 import com.dotran.oms.core.annotation.PersistenceAdapter;
+import com.dotran.oms.core.domain.id.InventoryId;
+import com.dotran.oms.core.domain.id.MerchantId;
 import com.dotran.oms.core.domain.id.OrderId;
+import com.dotran.oms.core.domain.id.OrderItemId;
+import com.dotran.oms.core.domain.id.ProductId;
+import com.dotran.oms.core.domain.id.SKU;
+import com.dotran.oms.core.domain.id.StoreId;
 import lombok.RequiredArgsConstructor;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -57,12 +65,33 @@ public class StockReservationRepositoryAdapter implements StockReservationReposi
     }
 
     @Override
-    public List<StockReservation> getByOrderId(OrderId orderId) {
-        List<StockReservationEntity> entities = springDataStockReservationRepository.findByOrderId(orderId.getValue());
-
-        return entities.stream()
-                .map(stockReservationPersistenceMapper::toDomain)
+    public List<ReservationLineView> getLineViews(MerchantId merchantId, StoreId storeId, OrderId orderId) {
+        return springDataStockReservationRepository
+                .findLineViews(merchantId.getValue(), storeId.getValue(), orderId.getValue())
+                .stream()
+                .map(v -> new ReservationLineView(
+                        StockReservationId.of(v.getId()),
+                        OrderItemId.of(v.getOrderItemId()),
+                        InventoryId.of(v.getInventoryId()),
+                        ProductId.of(v.getProductId()),
+                        SKU.of(v.getSku()),
+                        v.getQuantity(),
+                        ReservationStatus.valueOf(v.getStatus()),
+                        v.getExpiresAtMicros() == null ? null
+                                : Instant.EPOCH.plus(v.getExpiresAtMicros(), ChronoUnit.MICROS)))
                 .toList();
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Set<StockReservationId> markReleased(Collection<StockReservationId> stockReservationIds) {
+        return transition(stockReservationIds, ReservationStatus.RESERVED, ReservationStatus.RELEASED);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Set<StockReservationId> markReturned(Collection<StockReservationId> stockReservationIds) {
+        return transition(stockReservationIds, ReservationStatus.CONFIRMED, ReservationStatus.RETURNED);
     }
 
     @Override

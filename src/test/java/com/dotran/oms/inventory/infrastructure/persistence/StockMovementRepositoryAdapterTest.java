@@ -1,6 +1,8 @@
 package com.dotran.oms.inventory.infrastructure.persistence;
 
 import com.dotran.oms.inventory.common.id.StockMovementId;
+import com.dotran.oms.inventory.common.id.StockReservationId;
+import com.dotran.oms.inventory.domain.enums.ReservationStatus;
 import com.dotran.oms.inventory.domain.enums.StockMovementType;
 import com.dotran.oms.inventory.domain.model.StockMovement;
 import com.dotran.oms.inventory.infrastructure.mapper.StockMovementPersistenceMapper;
@@ -117,6 +119,32 @@ class StockMovementRepositoryAdapterTest {
             List<StockMovement> result = adapter.getByInventoryId(inventoryId);
 
             assertTrue(result.isEmpty());
+        }
+    }
+
+    @Nested
+    @DisplayName("insertForReservations")
+    class InsertForReservations {
+
+        @Test
+        @DisplayName("passes distinct sorted ids, type and required status to the INSERT ... SELECT")
+        void shouldDelegateWithSortedDistinctIds() {
+            when(repository.insertForReservations(List.of(1L, 2L, 3L), "RESERVE", "ORDER_ITEM", "RESERVED", null)).thenReturn(3);
+
+            int result = adapter.insertForReservations(
+                    List.of(StockReservationId.of(3L), StockReservationId.of(1L), StockReservationId.of(2L),
+                            StockReservationId.of(1L)),
+                    StockMovementType.RESERVE, ReservationStatus.RESERVED, null);
+
+            assertEquals(3, result);
+        }
+
+        @Test
+        @DisplayName("returns 0 without a query for an empty list")
+        void shouldSkipEmpty() {
+            assertEquals(0, adapter.insertForReservations(List.of(), StockMovementType.SALE,
+                    ReservationStatus.CONFIRMED, null));
+            verifyNoInteractions(repository);
         }
     }
 }

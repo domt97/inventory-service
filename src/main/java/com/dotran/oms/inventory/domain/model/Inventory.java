@@ -4,7 +4,9 @@ import com.dotran.oms.core.exception.ValidationException;
 import com.dotran.oms.inventory.domain.enums.InventoryStatus;
 import com.dotran.oms.inventory.domain.enums.StockMovementType;
 import com.dotran.oms.inventory.domain.exception.InsufficientStockException;
+import com.dotran.oms.inventory.domain.exception.InvalidMovementTypeException;
 import com.dotran.oms.inventory.domain.exception.InvalidQuantityException;
+import com.dotran.oms.inventory.domain.exception.InventoryNotOrderableException;
 import com.dotran.oms.inventory.domain.exception.InvalidReservationException;
 import com.dotran.oms.core.domain.BaseDomain;
 import com.dotran.oms.core.domain.id.InventoryId;
@@ -37,10 +39,14 @@ public class Inventory extends BaseDomain<InventoryId> {
     private Instant createdAt;
     private Instant updatedAt;
 
+    /**
+     * A row created by support through the internal endpoint: no stock and INACTIVE, so not orderable (BR-INV-08) until
+     * the catalog's next ProductUpdated sets its status. Catalog-created rows use {@link #forCatalogSku}.
+     */
     public void init() {
         this.quantity = 0L;
         this.reservedQuantity = 0L;
-        this.status = InventoryStatus.ACTIVE;
+        this.status = InventoryStatus.INACTIVE;
         this.createdAt = this.updatedAt = Instant.now();
     }
 
@@ -72,9 +78,14 @@ public class Inventory extends BaseDomain<InventoryId> {
         this.quantity += quantity;
     }
 
+    /** Domain check before the guarded SQL reserve: INACTIVE is not orderable (BR-INV-08), then stock. */
     public void reserve(Long quantity) {
 
         validatePositive(quantity);
+
+        if (status != InventoryStatus.ACTIVE) {
+            throw new InventoryNotOrderableException();
+        }
 
         if (availableQuantity() < quantity) {
             throw new InsufficientStockException();
@@ -106,7 +117,11 @@ public class Inventory extends BaseDomain<InventoryId> {
         this.quantity -= quantity;
     }
 
+    /** Manual adjustment of on-hand stock; the order hold types are refused (BR-INV-05). Allowed when INACTIVE (BR-INV-10). */
     public void adjust(StockMovementType stockMovementType, Long quantity) {
+        if (stockMovementType == null || !stockMovementType.isManualAdjustable()) {
+            throw new InvalidMovementTypeException(stockMovementType);
+        }
         validatePositive(quantity);
 
         Long adjustQuantity = stockMovementType.isStockIn() ? quantity : -quantity;

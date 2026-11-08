@@ -1,10 +1,12 @@
 package com.dotran.oms.inventory.application.service;
 
 import com.dotran.oms.inventory.application.repository.InventoryRepository;
+import com.dotran.oms.inventory.application.repository.StockMovementRepository;
 import com.dotran.oms.inventory.application.repository.StockReservationRepository;
 import com.dotran.oms.inventory.common.id.StockReservationId;
 import com.dotran.oms.inventory.domain.enums.InventoryStatus;
 import com.dotran.oms.inventory.domain.enums.ReservationStatus;
+import com.dotran.oms.inventory.domain.enums.StockMovementType;
 import com.dotran.oms.inventory.domain.exception.InvalidReservationException;
 import com.dotran.oms.inventory.domain.exception.InvalidReservationStateException;
 import com.dotran.oms.inventory.domain.model.Inventory;
@@ -48,6 +50,9 @@ class ExpireByInventoryTransactionTest {
 
     @Mock
     private InventoryRepository inventoryRepository;
+
+    @Mock
+    private StockMovementRepository stockMovementRepository;
 
     @InjectMocks
     private ExpireByInventoryTransaction expireByInventoryTransaction;
@@ -101,7 +106,7 @@ class ExpireByInventoryTransactionTest {
     void shouldReturnEarlyWhenNoReservations() {
         expireByInventoryTransaction.execute(inventoryId, Collections.emptyList());
 
-        verifyNoInteractions(stockReservationRepository, inventoryRepository);
+        verifyNoInteractions(stockReservationRepository, inventoryRepository, stockMovementRepository);
     }
 
     @Test
@@ -201,7 +206,7 @@ class ExpireByInventoryTransactionTest {
         assertThrows(InvalidReservationStateException.class,
                 () -> expireByInventoryTransaction.execute(inventoryId, List.of(alreadyExpired)));
 
-        verifyNoInteractions(stockReservationRepository, inventoryRepository);
+        verifyNoInteractions(stockReservationRepository, inventoryRepository, stockMovementRepository);
     }
 
     @Test
@@ -234,6 +239,8 @@ class ExpireByInventoryTransactionTest {
 
         verify(inventoryRepository).release(inventoryId, 10L);
         verify(inventoryRepository, never()).release(inventoryId, 25L);
+        verify(stockMovementRepository).insertForReservations(List.of(stillReserved.getId()),
+                StockMovementType.RESERVE_EXPIRE, ReservationStatus.EXPIRED, null);
     }
 
     @Test
@@ -246,6 +253,53 @@ class ExpireByInventoryTransactionTest {
 
         expireByInventoryTransaction.execute(inventoryId, List.of(r1, r2));
 
-        verifyNoInteractions(inventoryRepository);
+        verifyNoInteractions(inventoryRepository, stockMovementRepository);
+    }
+
+    @Test
+    @DisplayName("writes one RESERVE_EXPIRE movement per expired reservation after the release (BR-INV-05)")
+    void shouldWriteExpireMovementsAfterRelease() {
+        StockReservation r1 = buildReservation(1L, 10L);
+        StockReservation r2 = buildReservation(2L, 15L);
+
+        when(stockReservationRepository.markExpired(anyList())).thenReturn(Set.of(r1.getId(), r2.getId()));
+        when(inventoryRepository.getById(inventoryId)).thenReturn(Optional.of(buildInventory(100L, 25L)));
+        when(inventoryRepository.release(inventoryId, 25L)).thenReturn(1);
+        when(stockMovementRepository.insertForReservations(anyList(), any(), any(), any())).thenReturn(2);
+
+        expireByInventoryTransaction.execute(inventoryId, List.of(r1, r2));
+
+        InOrder inOrder = inOrder(inventoryRepository, stockMovementRepository);
+        inOrder.verify(inventoryRepository).release(inventoryId, 25L);
+        inOrder.verify(stockMovementRepository).insertForReservations(List.of(r1.getId(), r2.getId()),
+                StockMovementType.RESERVE_EXPIRE, ReservationStatus.EXPIRED, null);
+    }
+
+    @Test
+    @DisplayName("a movement shortfall is only logged: the expiry is not rolled back")
+    void shouldNotThrowOnMovementShortfall() {
+        StockReservation reservation = buildReservation(20L);
+
+        when(stockReservationRepository.markExpired(anyList())).thenReturn(Set.of(reservation.getId()));
+        when(inventoryRepository.getById(inventoryId)).thenReturn(Optional.of(buildInventory(100L, 20L)));
+        when(inventoryRepository.release(inventoryId, 20L)).thenReturn(1);
+        when(stockMovementRepository.insertForReservations(anyList(), any(), any(), any())).thenReturn(0);
+
+        org.junit.jupiter.api.Assertions.assertDoesNotThrow(
+                () -> expireByInventoryTransaction.execute(inventoryId, List.of(reservation)));
+    }
+
+    @Test
+    @DisplayName("no movement when the release fails")
+    void shouldNotWriteMovementWhenReleaseFails() {
+        StockReservation reservation = buildReservation(20L);
+
+        when(stockReservationRepository.markExpired(anyList())).thenReturn(Set.of(reservation.getId()));
+        when(inventoryRepository.getById(inventoryId)).thenReturn(Optional.of(buildInventory(100L, 30L)));
+        when(inventoryRepository.release(inventoryId, 20L)).thenReturn(0);
+
+        assertThrows(InvalidReservationException.class,
+                () -> expireByInventoryTransaction.execute(inventoryId, List.of(reservation)));
+        verifyNoInteractions(stockMovementRepository);
     }
 }

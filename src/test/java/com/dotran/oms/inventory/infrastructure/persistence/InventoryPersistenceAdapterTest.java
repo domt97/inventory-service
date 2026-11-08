@@ -275,14 +275,38 @@ class InventoryPersistenceAdapterTest {
     class AtomicSql {
 
         @Test
-        @DisplayName("reserve unwraps InventoryId and delegates to Spring Data repo")
+        @DisplayName("reserve unwraps ids and delegates to the guarded SQL (merchant, store, ACTIVE)")
         void shouldDelegateReserve() {
-            when(springDataInventoryRepository.reserve(inventoryUUID, 30L)).thenReturn(1);
+            when(springDataInventoryRepository.reserve(inventoryUUID, merchantUUID, storeUUID, 30L)).thenReturn(1);
 
-            int result = adapter.reserve(inventoryId, 30L);
+            int result = adapter.reserve(inventoryId, merchantId, storeId, 30L);
 
             assertEquals(1, result);
-            verify(springDataInventoryRepository).reserve(inventoryUUID, 30L);
+            verify(springDataInventoryRepository).reserve(inventoryUUID, merchantUUID, storeUUID, 30L);
+        }
+
+        @Test
+        @DisplayName("getByMerchantStoreAndSkus and getStockStates skip the query on empty input")
+        void shouldSkipQueryOnEmptyInput() {
+            assertTrue(adapter.getByMerchantStoreAndSkus(merchantId, storeId, java.util.List.of()).isEmpty());
+            assertTrue(adapter.getStockStates(java.util.List.of()).isEmpty());
+            verifyNoInteractions(springDataInventoryRepository);
+        }
+
+        @Test
+        @DisplayName("getStockStates maps the scalar projection")
+        void shouldMapStockStates() {
+            SpringDataInventoryRepository.StockStateView view = mock(SpringDataInventoryRepository.StockStateView.class);
+            when(view.getId()).thenReturn(inventoryUUID);
+            when(view.getStatus()).thenReturn("INACTIVE");
+            when(view.getAvailable()).thenReturn(4L);
+            when(springDataInventoryRepository.findStockStates(java.util.List.of(inventoryUUID)))
+                    .thenReturn(java.util.List.of(view));
+
+            var result = adapter.getStockStates(java.util.List.of(inventoryId, inventoryId));
+
+            assertEquals(java.util.List.of(new com.dotran.oms.inventory.application.repository.StockState(
+                    inventoryId, InventoryStatus.INACTIVE, 4L)), result);
         }
 
         @Test

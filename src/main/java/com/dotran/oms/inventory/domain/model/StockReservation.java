@@ -13,8 +13,8 @@ import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.experimental.SuperBuilder;
 
+import java.time.Duration;
 import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 
 @Getter
 @SuperBuilder
@@ -43,8 +43,9 @@ public class StockReservation extends BaseDomain<StockReservationId> {
                                                OrderId orderId,
                                                OrderItemId orderItemId,
                                                InventoryId inventoryId,
-                                               long quantity) {
-        Instant now = Instant.now();
+                                               long quantity,
+                                               Instant now,
+                                               Duration ttl) {
         return StockReservation.builder()
                 .merchantId(merchantId)
                 .storeId(storeId)
@@ -55,7 +56,7 @@ public class StockReservation extends BaseDomain<StockReservationId> {
                 .status(ReservationStatus.RESERVED)
                 .createdAt(now)
                 .updatedAt(now)
-                .expiresAt(now.plus(30, ChronoUnit.MINUTES))
+                .expiresAt(now.plus(ttl))
                 .build();
     }
 
@@ -74,6 +75,16 @@ public class StockReservation extends BaseDomain<StockReservationId> {
         }
 
         status = ReservationStatus.CONFIRMED;
+        updatedAt = Instant.now();
+    }
+
+    /** Confirmed goods put back into stock by a release with restock (BR-INV-03, BR-ORD-09). */
+    public void restock() {
+        if (status != ReservationStatus.CONFIRMED) {
+            throw new InvalidReservationStateException();
+        }
+
+        status = ReservationStatus.RETURNED;
         updatedAt = Instant.now();
     }
 

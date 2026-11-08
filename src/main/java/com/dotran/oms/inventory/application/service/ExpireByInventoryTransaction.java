@@ -2,8 +2,11 @@ package com.dotran.oms.inventory.application.service;
 
 import com.dotran.oms.core.util.CollectionUtils;
 import com.dotran.oms.inventory.application.repository.InventoryRepository;
+import com.dotran.oms.inventory.application.repository.StockMovementRepository;
 import com.dotran.oms.inventory.application.repository.StockReservationRepository;
 import com.dotran.oms.inventory.common.id.StockReservationId;
+import com.dotran.oms.inventory.domain.enums.ReservationStatus;
+import com.dotran.oms.inventory.domain.enums.StockMovementType;
 import com.dotran.oms.inventory.domain.exception.InvalidReservationException;
 import com.dotran.oms.inventory.domain.model.Inventory;
 import com.dotran.oms.inventory.domain.model.StockReservation;
@@ -25,6 +28,7 @@ public class ExpireByInventoryTransaction {
 
     private final StockReservationRepository stockReservationRepository;
     private final InventoryRepository inventoryRepository;
+    private final StockMovementRepository stockMovementRepository;
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void execute(InventoryId inventoryId, List<StockReservation> expiredReservations) {
@@ -67,6 +71,16 @@ public class ExpireByInventoryTransaction {
         if (updated == 0) {
             log.error("Failed to release inventory for inventoryId: {}", inventoryId);
             throw new InvalidReservationException();
+        }
+
+        // One RESERVE_EXPIRE movement per reservation this transaction expired (BR-INV-05). A count mismatch is only
+        // logged: throwing would roll back and retry this inventory on every tick.
+        List<StockReservationId> winnerIds = updatedReservations.stream().map(StockReservation::getId).toList();
+        int movements = stockMovementRepository.insertForReservations(winnerIds, StockMovementType.RESERVE_EXPIRE,
+                ReservationStatus.EXPIRED, null);
+        if (movements < winnerIds.size()) {
+            log.warn("Wrote {} RESERVE_EXPIRE movements for {} expired reservations of inventory {}",
+                    movements, winnerIds.size(), inventoryId);
         }
 
         log.info("Expired {} reservations and released {} quantity for inventory {}",

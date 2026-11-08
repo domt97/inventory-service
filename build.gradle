@@ -89,3 +89,37 @@ dependencies {
 tasks.named('test') {
 	useJUnitPlatform()
 }
+
+// Testcontainers 1.21.4 works with recent Docker Engine releases; the Boot 3.2.3 BOM would pick 1.19.x.
+ext['testcontainers.version'] = '1.21.4'
+
+// Integration tests (native SQL, constraints, locks, transactions) against Postgres in Docker (Testcontainers).
+// Run with ./gradlew integrationTest; not part of `test` or `check`. CI runs them in the job "Integration tests".
+testing {
+	suites {
+		integrationTest(JvmTestSuite) {
+			useJUnitJupiter()
+			dependencies {
+				implementation project()
+				implementation 'org.springframework.boot:spring-boot-starter-test'
+				implementation 'org.testcontainers:postgresql'
+				implementation 'org.testcontainers:junit-jupiter'
+				compileOnly 'org.projectlombok:lombok'
+				annotationProcessor 'org.projectlombok:lombok'
+				runtimeOnly 'org.junit.platform:junit-platform-launcher'
+			}
+			targets {
+				all {
+					testTask.configure {
+						shouldRunAfter(test)
+					}
+				}
+			}
+		}
+	}
+}
+
+configurations {
+	integrationTestImplementation.extendsFrom implementation
+	integrationTestRuntimeOnly.extendsFrom runtimeOnly
+}

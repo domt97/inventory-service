@@ -1,6 +1,7 @@
 package com.dotran.oms.inventory.infrastructure.persistence;
 
 import com.dotran.oms.inventory.application.repository.ExpiryCursor;
+import com.dotran.oms.inventory.application.repository.ReservationLineView;
 import com.dotran.oms.inventory.common.id.StockReservationId;
 import com.dotran.oms.inventory.domain.enums.ReservationStatus;
 import com.dotran.oms.inventory.domain.model.StockReservation;
@@ -10,6 +11,8 @@ import com.dotran.oms.inventory.infrastructure.persistence.jpa.SpringDataStockRe
 import com.dotran.oms.core.domain.id.InventoryId;
 import com.dotran.oms.core.domain.id.OrderId;
 import com.dotran.oms.core.domain.id.OrderItemId;
+import com.dotran.oms.core.domain.id.ProductId;
+import com.dotran.oms.core.domain.id.SKU;
 import com.dotran.oms.core.domain.id.StoreId;
 import com.dotran.oms.core.domain.id.MerchantId;
 import org.junit.jupiter.api.BeforeEach;
@@ -256,23 +259,65 @@ class StockReservationRepositoryAdapterTest {
     }
 
     @Nested
-    @DisplayName("getByOrderId")
-    class GetByOrderId {
+    @DisplayName("getLineViews")
+    class GetLineViews {
 
         @Test
-        @DisplayName("queries by order UUID and returns mapped domain objects")
-        void shouldReturnReservationsByOrder() {
-            UUID orderUUID = orderId.getValue();
-            StockReservationEntity entity = buildEntity(1L);
-            StockReservation reservation = buildReservation(1L);
+        @DisplayName("queries by merchant, store and order and maps the projection (micros -> Instant)")
+        void shouldMapLineViews() {
+            UUID orderItemUUID = UUID.randomUUID();
+            UUID productUUID = UUID.randomUUID();
+            SpringDataStockReservationRepository.LineView view = mock(SpringDataStockReservationRepository.LineView.class);
+            when(view.getId()).thenReturn(7L);
+            when(view.getOrderItemId()).thenReturn(orderItemUUID);
+            when(view.getInventoryId()).thenReturn(inventoryId.getValue());
+            when(view.getProductId()).thenReturn(productUUID);
+            when(view.getSku()).thenReturn("SKU-1");
+            when(view.getQuantity()).thenReturn(3L);
+            when(view.getStatus()).thenReturn("RESERVED");
+            when(view.getExpiresAtMicros()).thenReturn(1_762_509_600_123_456L);
+            when(springDataStockReservationRepository.findLineViews(merchantId.getValue(), storeId.getValue(),
+                    orderId.getValue())).thenReturn(List.of(view));
 
-            when(springDataStockReservationRepository.findByOrderId(orderUUID)).thenReturn(List.of(entity));
-            when(stockReservationPersistenceMapper.toDomain(entity)).thenReturn(reservation);
-
-            List<StockReservation> result = adapter.getByOrderId(orderId);
+            List<ReservationLineView> result = adapter.getLineViews(merchantId, storeId, orderId);
 
             assertEquals(1, result.size());
-            verify(springDataStockReservationRepository).findByOrderId(orderUUID);
+            ReservationLineView line = result.get(0);
+            assertEquals(StockReservationId.of(7L), line.id());
+            assertEquals(OrderItemId.of(orderItemUUID), line.orderItemId());
+            assertEquals(inventoryId, line.inventoryId());
+            assertEquals(ProductId.of(productUUID), line.productId());
+            assertEquals(SKU.of("SKU-1"), line.sku());
+            assertEquals(3L, line.quantity());
+            assertEquals(ReservationStatus.RESERVED, line.status());
+            assertEquals(Instant.parse("2025-11-07T10:00:00.123456Z"), line.expiresAt());
+        }
+    }
+
+    @Nested
+    @DisplayName("markReleased / markReturned")
+    class MarkReleasedReturned {
+
+        @Test
+        @DisplayName("markReleased guards RESERVED -> RELEASED")
+        void shouldGuardRelease() {
+            when(springDataStockReservationRepository.transitionStatus(1L, "RESERVED", "RELEASED")).thenReturn(1);
+            when(springDataStockReservationRepository.transitionStatus(2L, "RESERVED", "RELEASED")).thenReturn(0);
+
+            Set<StockReservationId> result = adapter.markReleased(
+                    List.of(new StockReservationId(1L), new StockReservationId(2L)));
+
+            assertEquals(Set.of(new StockReservationId(1L)), result);
+        }
+
+        @Test
+        @DisplayName("markReturned guards CONFIRMED -> RETURNED")
+        void shouldGuardReturn() {
+            when(springDataStockReservationRepository.transitionStatus(3L, "CONFIRMED", "RETURNED")).thenReturn(1);
+
+            Set<StockReservationId> result = adapter.markReturned(List.of(new StockReservationId(3L)));
+
+            assertEquals(Set.of(new StockReservationId(3L)), result);
         }
     }
 }

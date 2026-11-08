@@ -18,6 +18,9 @@ import java.time.Instant;
 @EqualsAndHashCode(callSuper = true)
 public class StockMovement extends BaseDomain<StockMovementId> {
 
+    /** Reference of every movement written for an order hold: the order line ({@code reference_id} = order item id). */
+    public static final String REFERENCE_TYPE_ORDER_ITEM = "ORDER_ITEM";
+
     private MerchantId merchantId;
     private StoreId storeId;
 

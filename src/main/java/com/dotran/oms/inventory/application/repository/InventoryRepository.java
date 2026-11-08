@@ -30,7 +30,17 @@ public interface InventoryRepository {
 
     List<Inventory> getByStoreIdAndSKUs(StoreId storeId, List<SKU> skus);
 
-    int reserve(InventoryId inventoryId, Long quantity);
+    /** Inventories of these SKUs in the store, scoped by merchant (empty input → empty result, no query). */
+    List<Inventory> getByMerchantStoreAndSkus(MerchantId merchantId, StoreId storeId, Collection<SKU> skus);
+
+    /**
+     * Guarded reserve: {@code reserved += quantity} only when the row belongs to merchant and store, is ACTIVE
+     * (BR-INV-08) and has enough available stock. 0 = refused.
+     */
+    int reserve(InventoryId inventoryId, MerchantId merchantId, StoreId storeId, long quantity);
+
+    /** Status and available quantity read with native SQL (not the persistence context); empty input → empty. */
+    List<StockState> getStockStates(Collection<InventoryId> inventoryIds);
 
     int confirm(InventoryId inventoryId, Long quantity);
 
