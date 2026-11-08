@@ -166,8 +166,10 @@ class StockSqlIT extends PostgresIT {
 
             Boolean first = tx.execute(st -> headerRepository.insertIfAbsent(
                     header(order, OrderReservationStatus.CANCELLED, null, null)));
+            // A later release's insert (CANCELLED, restock set) conflicts and leaves the first header as it is.
+            // (CHECKs run before ON CONFLICT, so the probe row itself must be valid.)
             Boolean second = tx.execute(st -> headerRepository.insertIfAbsent(
-                    header(order, OrderReservationStatus.RESERVED, true, null)));
+                    header(order, OrderReservationStatus.CANCELLED, true, null)));
             Optional<StockReservationOrder> own = tx.execute(st -> headerRepository.lockForUpdate(OrderId.of(order),
                     MerchantId.of(merchant), StoreId.of(store)));
             Optional<StockReservationOrder> otherStore = tx.execute(st -> headerRepository.lockForUpdate(
