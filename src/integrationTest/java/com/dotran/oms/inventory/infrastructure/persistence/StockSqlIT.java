@@ -212,8 +212,10 @@ class StockSqlIT extends PostgresIT {
             tx.execute(st -> headerRepository.update(header(order, OrderReservationStatus.REJECTED, null, rejection),
                     OrderReservationStatus.RESERVED));
 
-            assertThat(tx.execute(st -> headerRepository.lockForUpdate(OrderId.of(order), MerchantId.of(merchant),
-                    StoreId.of(store)))).map(StockReservationOrder::rejection).contains(rejection);
+            // Typed local: assertThat(tx.execute(...)) is ambiguous for javac (generic T vs the Predicate overloads).
+            Optional<StockReservationOrder> read = tx.execute(st -> headerRepository.lockForUpdate(OrderId.of(order),
+                    MerchantId.of(merchant), StoreId.of(store)));
+            assertThat(read).map(StockReservationOrder::rejection).contains(rejection);
         }
 
         @Test
