@@ -33,9 +33,15 @@ public class AdjustStockService implements AdjustStockUseCase {
         inventory.validateMerchantAndStore(cmd.getMerchantId(), cmd.getStoreId());
         inventory.adjust(cmd.getMovementType(), cmd.getQuantity()); // domain validation
 
-        int updated = cmd.getMovementType().isStockIn()
-                ? repository.stockIn(cmd.getInventoryId(), cmd.getMerchantId(), cmd.getStoreId(), cmd.getQuantity())
-                : repository.stockOut(cmd.getInventoryId(), cmd.getMerchantId(), cmd.getStoreId(), cmd.getQuantity());
+        // Inventory.adjust already refused every type that is neither stock in nor stock out (the order holds).
+        int updated;
+        if (cmd.getMovementType().isStockIn()) {
+            updated = repository.stockIn(cmd.getInventoryId(), cmd.getMerchantId(), cmd.getStoreId(), cmd.getQuantity());
+        } else if (cmd.getMovementType().isStockOut()) {
+            updated = repository.stockOut(cmd.getInventoryId(), cmd.getMerchantId(), cmd.getStoreId(), cmd.getQuantity());
+        } else {
+            throw new IllegalStateException("Not a manual movement type: " + cmd.getMovementType());
+        }
 
         if (updated == 0) {
             throw new InsufficientStockException();

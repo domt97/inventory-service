@@ -12,6 +12,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -49,7 +50,9 @@ class StockReservationTest {
                     OrderId.of(UUID.randomUUID()),
                     OrderItemId.of(UUID.randomUUID()),
                     InventoryId.of(UUID.randomUUID()),
-                    20L
+                    20L,
+                    Instant.now(),
+                    Duration.ofMinutes(15)
             );
 
             assertEquals(ReservationStatus.RESERVED, reservation.getStatus());
@@ -59,9 +62,9 @@ class StockReservationTest {
         }
 
         @Test
-        @DisplayName("sets expiry to 30 minutes from creation")
-        void shouldSetExpiryTo30Minutes() {
-            Instant before = Instant.now();
+        @DisplayName("sets expiry to now plus the configured ttl (BR-INV-02)")
+        void shouldSetExpiryFromTtl() {
+            Instant now = Instant.parse("2026-11-07T10:00:00Z");
 
             StockReservation reservation = StockReservation.reserve(
                     MerchantId.of(UUID.randomUUID()),
@@ -69,12 +72,13 @@ class StockReservationTest {
                     OrderId.of(UUID.randomUUID()),
                     OrderItemId.of(UUID.randomUUID()),
                     InventoryId.of(UUID.randomUUID()),
-                    10L
+                    10L,
+                    now,
+                    Duration.ofMinutes(15)
             );
 
-            Instant after = Instant.now();
-            assertTrue(reservation.getExpiresAt().isAfter(before.plusSeconds(1799)));
-            assertTrue(reservation.getExpiresAt().isBefore(after.plusSeconds(1801)));
+            assertEquals(Instant.parse("2026-11-07T10:15:00Z"), reservation.getExpiresAt());
+            assertEquals(now, reservation.getCreatedAt());
         }
     }
 
@@ -176,6 +180,32 @@ class StockReservationTest {
             StockReservation reservation = buildReservation(ReservationStatus.CONFIRMED);
 
             assertThrows(InvalidReservationStateException.class, reservation::release);
+        }
+    }
+
+    @Nested
+    @DisplayName("restock()")
+    class Restock {
+
+        @Test
+        @DisplayName("transitions from CONFIRMED to RETURNED")
+        void shouldTransitionToReturned() {
+            StockReservation reservation = buildReservation(ReservationStatus.CONFIRMED);
+
+            reservation.restock();
+
+            assertEquals(ReservationStatus.RETURNED, reservation.getStatus());
+        }
+
+        @Test
+        @DisplayName("throws InvalidReservationStateException when not CONFIRMED")
+        void shouldThrowWhenNotConfirmed() {
+            for (ReservationStatus status : new ReservationStatus[]{ReservationStatus.RESERVED,
+                    ReservationStatus.RELEASED, ReservationStatus.EXPIRED, ReservationStatus.RETURNED}) {
+                StockReservation reservation = buildReservation(status);
+
+                assertThrows(InvalidReservationStateException.class, reservation::restock, status.name());
+            }
         }
     }
 }

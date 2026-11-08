@@ -10,18 +10,19 @@ Stock truth per (store, SKU): quantity, reservations for orders, and an audit tr
 Postgres DB `inventory`, schema `inventory`; no DynamoDB (merchant id arrives with `ProductCreated`). Port **8058**.
 Consumes `ProductCreated` and `ProductUpdated` (Kafka, through `SyncProductInventoryService`) and a reservation-expire tick (EventBridge → SQS, every minute).
 Failed Kafka records go to `<topic>.DLT` (`KafkaErrorHandlingConfig`).
-Publishes nothing yet (no outbox table).
+Publishes nothing yet (no outbox table). The stock commands of ADR 0006 (reserve, confirm, release) are built as use
+cases returning results; their Kafka entry points and replies come in later PRs.
 
 ## Layout (`com.dotran.oms.inventory`)
 
 | Layer | Package | Contains |
 |-------|---------|----------|
-| Domain (no Spring) | `domain/model` | `Inventory` (aggregate), `StockReservation` (aggregate), `StockMovement` (audit entity) |
-| | `domain/enums`, `exception` | `ReservationStatus`, `StockMovementType`, `InventoryStatus`, `ProductStatus`, `ProductSkuStatus`; `InsufficientStockException`, `InvalidQuantityException`, `InvalidReservation*`, `InvalidCatalogEventException`, `CatalogOwnershipMismatchException` |
+| Domain (no Spring) | `domain/model` | `Inventory` (aggregate), `StockReservation` (aggregate), `StockReservationOrder` (order header, + `ReservationRejection`), `StockMovement` (audit entity) |
+| | `domain/enums`, `exception` | `ReservationStatus`, `StockMovementType`, `InventoryStatus`, `ProductStatus`, `ProductSkuStatus`, `OrderReservationStatus`, `LineRejectionReason`, `OrderRejectionReason`; `InsufficientStockException`, `InvalidQuantityException`, `InvalidReservation*`, `InvalidCatalogEventException`, `CatalogOwnershipMismatchException`, `InventoryNotOrderableException`, `InvalidMovementTypeException`, `InvalidStockCommandException`, `StockCommandOwnershipMismatchException` |
 | Application | `application/usecase/{inventory,reservation,movement}` | Inbound ports `XxxUseCase` |
 | | `application/service` | `@UseCase` implementations (flat package), `@Transactional` here |
 | | `application/command`, `dto`, `repository`, `jobs` | `XxxCmd`, `XxxDto`, outbound ports |
-| | `application/config` | `@ConfigurationProperties` used by use cases (`ReservationExpiryProperties`) |
+| | `application/config` | `@ConfigurationProperties` used by use cases (`ReservationExpiryProperties`, `ReservationProperties`) |
 | Infrastructure | `infrastructure/rest/{api,internal,dto,mapper,exception}` | Public controllers under `/v1/inventory/inventories`; internal controller under `/internal/v1/inventory/inventories` (`@Hidden`); `InventoryExceptionHandler` |
 | | `infrastructure/persistence/{entity,jpa}` | Adapters, entities, `SpringDataXxxRepository` (native SQL for stock updates) |
 | | `infrastructure/message` (+ `dto`) | Kafka/SQS consumers = anti-corruption layer; external event DTOs live here, never in `domain` |
@@ -30,21 +31,37 @@ Publishes nothing yet (no outbox table).
 
 - `available = quantity − reservedQuantity`; neither may go negative.
 - Stock is changed with **atomic conditional SQL** in `SpringDataInventoryRepository`, e.g.
-  `reserve`: `UPDATE ... SET reserved_quantity = reserved_quantity + :q WHERE id = :id AND (quantity - reserved_quantity) >= :q`.
-  The service checks the returned row count (`0` → `InsufficientStockException`). The domain method
+  `reserve`: `UPDATE ... SET reserved_quantity = reserved_quantity + :q WHERE id = :id AND merchant_id = :m AND store_id = :s
+  AND status = 'ACTIVE' AND (quantity - reserved_quantity) >= :q`.
+  The service checks the returned row count (`0` → a rejection, or `InsufficientStockException` for a manual adjust). The domain method
   (`Inventory.reserve()` etc.) validates first, but **the SQL guard is what prevents oversell** under concurrency.
   Keep this pattern for any new stock operation; do not load-modify-save quantities.
-- `StockReservation` transitions only from `RESERVED` → `CONFIRMED` | `RELEASED` | `EXPIRED`. TTL is 30 min (`StockReservation.reserve`).
-  The domain method states the rule; the **guarded UPDATE enforces it**: `StockReservationRepository.markConfirmed` / `markExpired`
-  run `UPDATE ... WHERE id = :id AND status = 'RESERVED'` per id (ascending) and return the ids that won. Change
-  `reserved_quantity` only for the winners. Never save a reservation status via load-modify-save; a new transition
-  (e.g. release) gets its own guarded `markXxx` method.
-- **Lock order**: reservation status updates by id ascending, then inventory rows in Java `UUID.compareTo` order
-  (`ReserveStockService` sorts lines, `ConfirmStockReservationService` uses a `TreeMap` with the same comparator).
-  Java and Postgres order UUIDs differently, so any new multi-inventory locker must use the same Java comparator
-  (not SQL `ORDER BY id ... FOR UPDATE`). Keep it, or deadlocks return.
-- Confirm is idempotent per order: all `CONFIRMED` → no-op; any `EXPIRED`/`RELEASED` → `InvalidReservationStateException` ("not RESERVED", final);
-  a lost guarded update → `InvalidReservationStateException` ("modified concurrently", retry resolves it) and the whole transaction rolls back.
+- `StockReservation` transitions: `RESERVED` → `CONFIRMED` | `RELEASED` | `EXPIRED`, and `CONFIRMED` → `RETURNED` (release with
+  restock, BR-INV-03). `CANCELLED` is never used for a reservation. The hold TTL comes from `app.reservation.ttl` (15 min,
+  BR-INV-02). The domain method states the rule; the **guarded UPDATE enforces it**: `markConfirmed` / `markExpired` /
+  `markReleased` / `markReturned` run `UPDATE ... WHERE id = :id AND status = :from` per id (ascending) and return the ids
+  that won. Change stock only for the winners. Never save a reservation status via load-modify-save.
+- **Order header first** (`stock_reservation_orders`, ADR 0006, flow `order-stock-reservation.md`). Reserve, confirm and
+  release each: `applyLocal` (`SET LOCAL lock_timeout` / `statement_timeout`), `insertIfAbsent` the header
+  (`ON CONFLICT DO NOTHING`), then `lockForUpdate` it scoped by (order, merchant, store); empty → another merchant/store
+  owns the order → `StockCommandOwnershipMismatchException` (contract error). Everything else is decided from the header
+  and line statuses under that lock: a duplicate changes no stock and answers the current state (BR-INV-07); the
+  duplicate check runs before the stale check; a confirm or release without header leaves a closed tombstone; the first
+  release fixes `restock`. Business outcomes are **results** (`ReserveStockResult`, ...), contract errors throw
+  (`InvalidStockCommandException`). The three transactions are bounded by `app.reservation.transaction-timeout-seconds`.
+- **Lock order**: order header → reservation status updates by id ascending (release: the RESERVED ids, then the
+  CONFIRMED ids — two disjoint sets) → inventory rows in Java `UUID.compareTo` order
+  (`ReserveStockService` sorts lines; confirm and release use a `TreeMap` with the same comparator, one pass). The expiry
+  takes only reservation → inventory and never the header. Java and Postgres order UUIDs differently, so any new
+  multi-inventory locker must use the same Java comparator (not SQL `ORDER BY id ... FOR UPDATE`). Keep it, or deadlocks return.
+- **Reserve is all or nothing** (≤ `max-lines` 100, BR-INV-11): missing row / other product → `UNKNOWN_SKU`, INACTIVE →
+  `NOT_ORDERABLE`, short → `INSUFFICIENT_STOCK`; a guarded update lost at line *n* releases lines 1..n-1 in the same
+  transaction and reads the reasons with `getStockStates`. The rejection is stored on the header (JSONB) for duplicates.
+- **Movements for every hold change** (BR-INV-05): `RESERVE`, `SALE` (confirm), `RESERVE_RELEASE`, `RESERVE_EXPIRE`,
+  `RETURN` (restock) are written by `StockMovementRepository.insertForReservations` (native `INSERT … SELECT` from the
+  reservations in the required status, `reference_type = ORDER_ITEM`, `reference_id` = order item, `reservation_id` set,
+  `ON CONFLICT (reservation_id, type) DO NOTHING`). Commands check the count and throw on a shortfall; the expiry only
+  logs it. The hold types are refused by a manual adjust (`InvalidMovementTypeException`, 400); a manual `SALE` is allowed.
 - Expiry runs per inventory in its own transaction (`ExpireByInventoryTransaction`, `REQUIRES_NEW`) so one failure does not roll back others;
   `ExpireStockReservationService` catches any `RuntimeException` per inventory, logs `Reservation expiry failed for inventory {}` and continues
   (the rolled-back reservations stay `RESERVED` and are retried on the next tick; the SQS message is still acknowledged).
@@ -103,14 +120,18 @@ Publishes nothing yet (no outbox table).
 4. **Audit**: write a `StockMovement` with the right `StockMovementType`, `reference_type` and `reference_id` for every quantity change.
 5. **Entry point**: REST controller or a consumer in `infrastructure/message`. Consumers map the external DTO to a command and must be **idempotent** (Kafka delivery is at-least-once).
 6. **Errors**: map in `InventoryExceptionHandler` (extends `oms-core` `GlobalExceptionHandler`).
-7. **Migration**: `src/main/resources/db/migration/V<next>__<what>.sql` (latest is `V3`); every table has `merchant_id`.
+7. **Migration**: `src/main/resources/db/migration/V<next>__<what>.sql` (latest is `V4`); every table has `merchant_id`.
 8. **Tests** mirroring the package: domain, service, adapter, controller/consumer.
 
 ## Tests
 
-Plain JUnit 5 + Mockito (`@ExtendWith(MockitoExtension.class)`), no Spring context, no DB.
-The conditional SQL is therefore **not** covered by tests — reason about it explicitly when you change it.
-Run: `./gradlew test`.
+- **Unit tests** (`src/test`): plain JUnit 5 + Mockito (`@ExtendWith(MockitoExtension.class)`), no Spring context, no DB.
+  Run: `./gradlew test`.
+- **Integration tests** (`src/integrationTest`, Gradle suite `integrationTest`, Docker needed): Testcontainers
+  `postgres:16-alpine`, Flyway V1..Vn, the JPA slice with the persistence adapters and the stock command services
+  (`support/PostgresIT`; no Kafka/SQS). They cover the native SQL, constraints, JSONB, `FOR UPDATE`, lock timeouts and
+  races, transaction timeouts (`StockSqlIT`, `StockCommandsIT`, `StockConcurrencyIT`, `StockCommandTransactionIT`). Run: `./gradlew integrationTest`; CI job `Integration tests`
+  (not a required check yet). Any change to native SQL or locking needs an IT here.
 
 ## Git workflow
 
@@ -128,11 +149,9 @@ Infra from the `development` repo (Postgres, Kafka, LocalStack with SQS queue + 
 
 ## Known gaps (do not assume these work)
 
-- **`ReserveStockService` is not idempotent per order item**: replaying the same order reserves twice.
-- **Reserve / confirm / expire do not write `StockMovement`** — only manual adjustment does, so the audit trail is incomplete.
 - Kafka DLT topics (`ProductCreated.DLT`, `ProductUpdated.DLT`) have no alerting and no replay tool; records there are only visible as an ERROR log. SQS `reservation-expire` has no DLQ.
-- The internal `POST /internal/v1/inventory/inventories` (`CreateInventoryService`, no caller today) bypasses the catalog version gate. A row it creates in the product's own merchant/store is corrected by the next `ProductUpdated`; a row in another merchant or store makes every later event of that product go to the DLT. It inserts in request order (not sorted by SKU), so it can deadlock with the sync; Postgres aborts one side and the sync is retried.
-- Reserve does not check inventory `status` yet (INACTIVE is advisory until order-service calls reserve).
-- `ReserveStock` and `ConfirmStockReservation` have no entry point; `OrderCreatedEventConsumer` is commented out; `ReleaseStockReservationUseCase` has no implementation.
+- The internal `POST /internal/v1/inventory/inventories` (`CreateInventoryService`, kept for support, no caller today) bypasses the catalog version gate and creates **INACTIVE** rows (not orderable, BR-INV-08). Such a row becomes orderable only through a later `ProductUpdated` of that product, and only if the request's `productId` owns the SKU in the catalog (otherwise the sync skips it as claimed by another product and it stays INACTIVE); `ProductCreated` (also from a DLT replay) never changes an existing row, so support makes it sellable by changing the product in stores-service. A row in another merchant or store makes every later event of that product go to the DLT. It inserts in request order (not sorted by SKU), so it can deadlock with the sync; Postgres aborts one side and the sync is retried. Stock can still be adjusted on an INACTIVE row (BR-INV-10).
+- The stock commands have no entry point yet (Kafka consumers and the outbox replies come in later PRs); `OrderCreatedEventConsumer` is commented out.
+- Order headers (`stock_reservation_orders`) are never cleaned up (one row per order).
 - REST endpoints take no `merchantId` (stores-service uses `/v1/store/merchants/{merchantId}/...`); `Inventory.validateMerchantAndStore` exists but merchant scoping of the API is undecided.
 - `ProductCreatedEvent` and `ProductUpdatedEvent` DTOs duplicate the producer's classes in stores-service — keep both in sync with `oms-workspace/architecture/contracts/events/*.schema.json`.

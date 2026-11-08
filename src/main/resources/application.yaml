@@ -79,6 +79,18 @@ app:
     # Ticks older than this are dropped if this instance swept recently; must be longer than the 1-minute schedule
     # plus time-budget (a tick can wait behind a running sweep).
     max-tick-age: ${RESERVATION_EXPIRY_MAX_TICK_AGE:PT2M}
+  reservation:
+    # Stock commands (ADR 0006). Hold time of a reservation (BR-INV-02); at most 24 hours.
+    ttl: ${RESERVATION_TTL:PT15M}
+    # Lines per ReserveStock (BR-INV-11), 1..100.
+    max-lines: ${RESERVATION_MAX_LINES:100}
+    # Clock skew accepted by the stale-command check (BR-INV-11); shorter than ttl.
+    clock-skew-tolerance: ${RESERVATION_CLOCK_SKEW_TOLERANCE:PT30S}
+    # SET LOCAL lock_timeout / statement_timeout of a command transaction; must be lock < statement < transaction.
+    lock-timeout: ${RESERVATION_LOCK_TIMEOUT:PT3S}
+    statement-timeout: ${RESERVATION_STATEMENT_TIMEOUT:PT5S}
+    # Also read by @Transactional(timeoutString) of the reserve / confirm / release use cases.
+    transaction-timeout-seconds: ${RESERVATION_TRANSACTION_TIMEOUT_SECONDS:10}
 
   swagger:
     title: Inventory Service API

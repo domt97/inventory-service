@@ -1,9 +1,9 @@
 package com.dotran.oms.inventory.application.usecase.reservation;
 
-
 import com.dotran.oms.inventory.application.command.ReserveStockCmd;
+import com.dotran.oms.inventory.application.dto.reservation.ReserveStockResult;
 
 public interface ReserveStockUseCase {
 
-    void reserve(ReserveStockCmd reserveStockCmd);
+    ReserveStockResult reserve(ReserveStockCmd cmd);
 }

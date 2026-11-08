@@ -9,6 +9,7 @@ import com.dotran.oms.inventory.common.id.StockMovementId;
 import com.dotran.oms.inventory.domain.enums.InventoryStatus;
 import com.dotran.oms.inventory.domain.enums.StockMovementType;
 import com.dotran.oms.inventory.domain.exception.InsufficientStockException;
+import com.dotran.oms.inventory.domain.exception.InvalidMovementTypeException;
 import com.dotran.oms.inventory.domain.model.Inventory;
 import com.dotran.oms.inventory.domain.model.StockMovement;
 import com.dotran.oms.core.domain.id.InventoryId;
@@ -22,6 +23,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -250,5 +253,31 @@ class AdjustStockServiceTest {
 
         assertThrows(InsufficientStockException.class, () -> adjustStockService.adjust(cmd));
         verify(stockMovementRepository, never()).create(any());
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = StockMovementType.class, names = {"RESERVE", "RESERVE_RELEASE", "RESERVE_EXPIRE"})
+    @DisplayName("order hold types are refused (400): no stock change, no movement (BR-INV-05)")
+    void shouldRefuseHoldTypes(StockMovementType type) {
+        when(repository.getById(inventoryId)).thenReturn(Optional.of(buildInventory(100L, 20L)));
+
+        assertThrows(InvalidMovementTypeException.class, () -> adjustStockService.adjust(buildCmd(type, 5L)));
+
+        verify(repository, never()).stockIn(any(), any(), any(), anyLong());
+        verify(repository, never()).stockOut(any(), any(), any(), anyLong());
+        verifyNoInteractions(stockMovementRepository);
+    }
+
+    @Test
+    @DisplayName("manual SALE is a stock-out (BR-INV-05)")
+    void shouldAllowManualSale() {
+        when(repository.getById(inventoryId)).thenReturn(Optional.of(buildInventory(100L, 0L)));
+        when(repository.stockOut(inventoryId, merchantId, storeId, 5L)).thenReturn(1);
+        when(stockMovementRepository.create(any(StockMovement.class))).thenReturn(buildSavedMovement());
+        when(inventoryMapper.toDetailDto(any())).thenReturn(mock(InventoryDetailDto.class));
+
+        adjustStockService.adjust(buildCmd(StockMovementType.SALE, 5L));
+
+        verify(repository).stockOut(inventoryId, merchantId, storeId, 5L);
     }
 }

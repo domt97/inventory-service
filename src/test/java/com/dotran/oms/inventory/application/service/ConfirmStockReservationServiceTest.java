@@ -1,234 +1,297 @@
 package com.dotran.oms.inventory.application.service;
 
-import com.dotran.oms.core.exception.ValidationException;
-import com.dotran.oms.inventory.application.command.ConfirmStockReservationCmd;
-import com.dotran.oms.inventory.application.repository.InventoryRepository;
-import com.dotran.oms.inventory.application.repository.StockReservationRepository;
-import com.dotran.oms.inventory.common.id.StockReservationId;
-import com.dotran.oms.inventory.domain.enums.ReservationStatus;
-import com.dotran.oms.inventory.domain.exception.InvalidReservationException;
-import com.dotran.oms.inventory.domain.exception.InvalidReservationStateException;
-import com.dotran.oms.inventory.domain.model.StockReservation;
+import com.dotran.oms.core.domain.id.EventId;
 import com.dotran.oms.core.domain.id.InventoryId;
+import com.dotran.oms.core.domain.id.MerchantId;
 import com.dotran.oms.core.domain.id.OrderId;
 import com.dotran.oms.core.domain.id.OrderItemId;
+import com.dotran.oms.core.domain.id.ProductId;
+import com.dotran.oms.core.domain.id.SKU;
 import com.dotran.oms.core.domain.id.StoreId;
-import com.dotran.oms.core.domain.id.MerchantId;
+import com.dotran.oms.inventory.application.command.ConfirmStockReservationCmd;
+import com.dotran.oms.inventory.application.config.ReservationProperties;
+import com.dotran.oms.inventory.application.dto.reservation.ConfirmStockReservationResult;
+import com.dotran.oms.inventory.application.dto.reservation.ConfirmStockReservationResult.Reason;
+import com.dotran.oms.inventory.application.dto.reservation.ReservationLineStatus;
+import com.dotran.oms.inventory.application.repository.InventoryRepository;
+import com.dotran.oms.inventory.application.repository.ReservationLineView;
+import com.dotran.oms.inventory.application.repository.StockMovementRepository;
+import com.dotran.oms.inventory.application.repository.StockReservationOrderRepository;
+import com.dotran.oms.inventory.application.repository.StockReservationRepository;
+import com.dotran.oms.inventory.application.repository.TransactionTimeoutRepository;
+import com.dotran.oms.inventory.common.id.StockReservationId;
+import com.dotran.oms.inventory.domain.enums.OrderReservationStatus;
+import com.dotran.oms.inventory.domain.enums.ReservationStatus;
+import com.dotran.oms.inventory.domain.enums.StockMovementType;
+import com.dotran.oms.inventory.domain.exception.InvalidReservationException;
+import com.dotran.oms.inventory.domain.exception.InvalidReservationStateException;
+import com.dotran.oms.inventory.domain.exception.InvalidStockCommandException;
+import com.dotran.oms.inventory.domain.exception.StockCommandOwnershipMismatchException;
+import com.dotran.oms.inventory.domain.model.StockReservationOrder;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.Duration;
 import java.time.Instant;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.Mockito.*;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("ConfirmStockReservationService")
 class ConfirmStockReservationServiceTest {
 
+    private static final InventoryId LOW = InventoryId.of(UUID.fromString("00000000-0000-0000-0000-000000000001"));
+    private static final InventoryId HIGH = InventoryId.of(UUID.fromString("00000000-0000-0000-0000-000000000002"));
+
+    @Mock
+    private StockReservationOrderRepository headerRepository;
     @Mock
     private StockReservationRepository stockReservationRepository;
-
     @Mock
     private InventoryRepository inventoryRepository;
+    @Mock
+    private StockMovementRepository stockMovementRepository;
+    @Mock
+    private TransactionTimeoutRepository transactionTimeoutRepository;
 
-    @InjectMocks
-    private ConfirmStockReservationService confirmStockReservationService;
+    private ConfirmStockReservationService service;
 
-    private MerchantId merchantId;
-    private StoreId storeId;
-    private OrderId orderId;
-    private InventoryId inventoryId;
+    private final MerchantId merchantId = MerchantId.of(UUID.randomUUID());
+    private final StoreId storeId = StoreId.of(UUID.randomUUID());
+    private final OrderId orderId = OrderId.of(UUID.randomUUID());
+    private final OrderItemId item1 = OrderItemId.of(UUID.randomUUID());
+    private final OrderItemId item2 = OrderItemId.of(UUID.randomUUID());
+    private final OrderItemId item3 = OrderItemId.of(UUID.randomUUID());
 
     @BeforeEach
     void setUp() {
-        merchantId = MerchantId.of(UUID.randomUUID());
-        storeId = StoreId.of(UUID.randomUUID());
-        orderId = OrderId.of(UUID.randomUUID());
-        inventoryId = InventoryId.of(UUID.randomUUID());
+        service = new ConfirmStockReservationService(headerRepository, stockReservationRepository,
+                inventoryRepository, stockMovementRepository, transactionTimeoutRepository,
+                new ReservationProperties());
     }
 
-    private StockReservation buildReservation(long id, InventoryId inventoryId, long quantity, ReservationStatus status) {
-        return StockReservation.builder()
-                .id(new StockReservationId(id))
-                .merchantId(merchantId)
-                .storeId(storeId)
-                .inventoryId(inventoryId)
-                .orderId(orderId)
-                .orderItemId(OrderItemId.of(UUID.randomUUID()))
-                .quantity(quantity)
-                .status(status)
-                .expiresAt(Instant.now().plusSeconds(1800))
-                .createdAt(Instant.now())
-                .updatedAt(Instant.now())
-                .build();
-    }
-
-    private StockReservation buildReservation(long id, long quantity) {
-        return buildReservation(id, inventoryId, quantity, ReservationStatus.RESERVED);
-    }
-
-    private ConfirmStockReservationCmd buildCmd() {
+    private ConfirmStockReservationCmd cmd() {
         return ConfirmStockReservationCmd.builder()
+                .eventId(EventId.newEventId())
+                .occurredAt(Instant.parse("2026-11-07T10:00:00Z"))
                 .merchantId(merchantId)
                 .storeId(storeId)
                 .orderId(orderId)
                 .build();
     }
 
-    private static Set<StockReservationId> idsOf(StockReservation... reservations) {
-        return Set.of(Arrays.stream(reservations).map(StockReservation::getId).toArray(StockReservationId[]::new));
+    private StockReservationOrder header(OrderReservationStatus status) {
+        return new StockReservationOrder(orderId, merchantId, storeId, status, null, null);
+    }
+
+    private void existingHeader(OrderReservationStatus status) {
+        when(headerRepository.insertIfAbsent(any())).thenReturn(false);
+        when(headerRepository.lockForUpdate(orderId, merchantId, storeId)).thenReturn(Optional.of(header(status)));
+    }
+
+    private ReservationLineView view(long id, OrderItemId item, InventoryId inventoryId, long quantity,
+                                     ReservationStatus status) {
+        return new ReservationLineView(StockReservationId.of(id), item, inventoryId, ProductId.of(UUID.randomUUID()),
+                SKU.of("SKU-" + id), quantity, status, Instant.parse("2026-11-07T10:15:00Z"));
+    }
+
+    private void lines(ReservationLineView... views) {
+        when(stockReservationRepository.getLineViews(merchantId, storeId, orderId)).thenReturn(List.of(views));
     }
 
     @Test
-    @DisplayName("marks reservations CONFIRMED, then confirms inventory")
-    void shouldConfirmReservationsAndUpdateInventory() {
-        StockReservation reservation = buildReservation(1L, 30L);
+    @DisplayName("confirms every line: reservations, inventories summed per row in UUID order, SALE movements, header CONFIRMED")
+    void confirmsAllLines() {
+        existingHeader(OrderReservationStatus.RESERVED);
+        lines(view(1, item1, HIGH, 2, ReservationStatus.RESERVED),
+                view(2, item2, LOW, 3, ReservationStatus.RESERVED),
+                view(3, item3, HIGH, 4, ReservationStatus.RESERVED));
+        List<StockReservationId> ids = List.of(StockReservationId.of(1L), StockReservationId.of(2L),
+                StockReservationId.of(3L));
+        when(stockReservationRepository.markConfirmed(ids)).thenReturn(Set.copyOf(ids));
+        when(inventoryRepository.confirm(any(), anyLong())).thenReturn(1);
+        when(stockMovementRepository.insertForReservations(anyList(), any(), any(), any())).thenReturn(3);
+        when(headerRepository.update(any(), eq(OrderReservationStatus.RESERVED))).thenReturn(1);
 
-        when(stockReservationRepository.getByOrderId(orderId)).thenReturn(List.of(reservation));
-        when(stockReservationRepository.markConfirmed(List.of(reservation.getId()))).thenReturn(idsOf(reservation));
-        when(inventoryRepository.confirm(inventoryId, 30L)).thenReturn(1);
+        ConfirmStockReservationResult result = service.confirm(cmd());
 
-        confirmStockReservationService.confirm(buildCmd());
+        InOrder inOrder = inOrder(transactionTimeoutRepository, headerRepository, stockReservationRepository,
+                inventoryRepository, stockMovementRepository);
+        inOrder.verify(transactionTimeoutRepository).applyLocal(Duration.ofSeconds(3), Duration.ofSeconds(5));
+        inOrder.verify(headerRepository).insertIfAbsent(header(OrderReservationStatus.CANCELLED));
+        inOrder.verify(headerRepository).lockForUpdate(orderId, merchantId, storeId);
+        inOrder.verify(stockReservationRepository).markConfirmed(ids);
+        inOrder.verify(inventoryRepository).confirm(LOW, 3L);
+        inOrder.verify(inventoryRepository).confirm(HIGH, 6L);
+        inOrder.verify(stockMovementRepository).insertForReservations(ids, StockMovementType.SALE,
+                ReservationStatus.CONFIRMED, null);
+        ArgumentCaptor<StockReservationOrder> captor = ArgumentCaptor.forClass(StockReservationOrder.class);
+        inOrder.verify(headerRepository).update(captor.capture(), eq(OrderReservationStatus.RESERVED));
+        assertThat(captor.getValue().status()).isEqualTo(OrderReservationStatus.CONFIRMED);
 
-        InOrder inOrder = inOrder(stockReservationRepository, inventoryRepository);
-        inOrder.verify(stockReservationRepository).markConfirmed(List.of(reservation.getId()));
-        inOrder.verify(inventoryRepository).confirm(inventoryId, 30L);
+        assertThat(result).isEqualTo(new ConfirmStockReservationResult.Confirmed(List.of(
+                new ReservationLineStatus(item1, ReservationStatus.CONFIRMED),
+                new ReservationLineStatus(item2, ReservationStatus.CONFIRMED),
+                new ReservationLineStatus(item3, ReservationStatus.CONFIRMED))));
     }
 
     @Test
-    @DisplayName("groups reservations by inventoryId, sums quantities and confirms inventories in ascending id order")
-    void shouldGroupByInventoryAndConfirmInSortedOrder() {
-        InventoryId lowId = InventoryId.of(UUID.fromString("00000000-0000-0000-0000-000000000001"));
-        InventoryId highId = InventoryId.of(UUID.fromString("00000000-0000-0000-0000-000000000002"));
+    @DisplayName("no header: creates a tombstone and answers UNKNOWN_ORDER, no stock touched")
+    void unknownOrderCreatesTombstone() {
+        when(headerRepository.insertIfAbsent(any())).thenReturn(true);
+        when(headerRepository.lockForUpdate(orderId, merchantId, storeId))
+                .thenReturn(Optional.of(header(OrderReservationStatus.CANCELLED)));
 
-        StockReservation r1 = buildReservation(1L, highId, 10L, ReservationStatus.RESERVED);
-        StockReservation r2 = buildReservation(2L, highId, 20L, ReservationStatus.RESERVED);
-        StockReservation r3 = buildReservation(3L, lowId, 15L, ReservationStatus.RESERVED);
+        ConfirmStockReservationResult result = service.confirm(cmd());
 
-        when(stockReservationRepository.getByOrderId(orderId)).thenReturn(List.of(r1, r2, r3));
-        when(stockReservationRepository.markConfirmed(any())).thenReturn(idsOf(r1, r2, r3));
-        when(inventoryRepository.confirm(highId, 30L)).thenReturn(1);
-        when(inventoryRepository.confirm(lowId, 15L)).thenReturn(1);
-
-        confirmStockReservationService.confirm(buildCmd());
-
-        InOrder inOrder = inOrder(inventoryRepository);
-        inOrder.verify(inventoryRepository).confirm(lowId, 15L);
-        inOrder.verify(inventoryRepository).confirm(highId, 30L);
+        verify(headerRepository).insertIfAbsent(header(OrderReservationStatus.CANCELLED));
+        assertThat(result).isEqualTo(new ConfirmStockReservationResult.ConfirmationFailed(Reason.UNKNOWN_ORDER, List.of()));
+        verifyNoInteractions(stockReservationRepository, inventoryRepository, stockMovementRepository);
+        verify(headerRepository, never()).update(any(), any());
     }
 
     @Test
-    @DisplayName("is a no-op when every reservation of the order is already CONFIRMED (redelivery)")
-    void shouldBeNoOpWhenAlreadyConfirmed() {
-        StockReservation r1 = buildReservation(1L, inventoryId, 10L, ReservationStatus.CONFIRMED);
-        StockReservation r2 = buildReservation(2L, inventoryId, 20L, ReservationStatus.CONFIRMED);
+    @DisplayName("header owned by another merchant or store: contract error")
+    void ownershipMismatch() {
+        when(headerRepository.insertIfAbsent(any())).thenReturn(false);
+        when(headerRepository.lockForUpdate(orderId, merchantId, storeId)).thenReturn(Optional.empty());
 
-        when(stockReservationRepository.getByOrderId(orderId)).thenReturn(List.of(r1, r2));
-
-        confirmStockReservationService.confirm(buildCmd());
-
-        verify(stockReservationRepository, never()).markConfirmed(any());
-        verifyNoInteractions(inventoryRepository);
+        assertThrows(StockCommandOwnershipMismatchException.class, () -> service.confirm(cmd()));
+        verifyNoInteractions(stockReservationRepository, inventoryRepository, stockMovementRepository);
     }
 
     @Test
-    @DisplayName("rejects the whole order when one reservation already EXPIRED, without writing anything")
-    void shouldRejectWhenOneReservationExpired() {
-        StockReservation reserved = buildReservation(1L, 10L);
-        StockReservation expired = buildReservation(2L, inventoryId, 20L, ReservationStatus.EXPIRED);
+    @DisplayName("missing orderId: contract error before any write")
+    void missingOrderId() {
+        ConfirmStockReservationCmd cmd = ConfirmStockReservationCmd.builder()
+                .eventId(EventId.newEventId()).occurredAt(Instant.now()).merchantId(merchantId).storeId(storeId)
+                .build();
 
-        when(stockReservationRepository.getByOrderId(orderId)).thenReturn(List.of(reserved, expired));
-
-        assertThrows(InvalidReservationStateException.class,
-                () -> confirmStockReservationService.confirm(buildCmd()));
-
-        verify(stockReservationRepository, never()).markConfirmed(any());
-        verifyNoInteractions(inventoryRepository);
+        assertThrows(InvalidStockCommandException.class, () -> service.confirm(cmd));
+        verifyNoInteractions(headerRepository, transactionTimeoutRepository);
     }
 
     @Test
-    @DisplayName("rejects the whole order when one reservation was RELEASED, with a final 'not RESERVED' error")
-    void shouldRejectWhenOneReservationReleased() {
-        StockReservation reserved = buildReservation(1L, 10L);
-        StockReservation released = buildReservation(2L, inventoryId, 20L, ReservationStatus.RELEASED);
+    @DisplayName("duplicate after a confirm (header CONFIRMED): Confirmed with the current statuses, nothing written")
+    void duplicateConfirm() {
+        existingHeader(OrderReservationStatus.CONFIRMED);
+        lines(view(1, item1, LOW, 2, ReservationStatus.CONFIRMED));
 
-        when(stockReservationRepository.getByOrderId(orderId)).thenReturn(List.of(reserved, released));
+        ConfirmStockReservationResult result = service.confirm(cmd());
 
-        InvalidReservationStateException ex = assertThrows(InvalidReservationStateException.class,
-                () -> confirmStockReservationService.confirm(buildCmd()));
-
-        assertTrue(ex.getMessage().contains("is not RESERVED"));
-        verify(stockReservationRepository, never()).markConfirmed(any());
-        verifyNoInteractions(inventoryRepository);
+        assertThat(result).isEqualTo(new ConfirmStockReservationResult.Confirmed(List.of(
+                new ReservationLineStatus(item1, ReservationStatus.CONFIRMED))));
+        verify(stockReservationRepository, never()).markConfirmed(anyCollection());
+        verifyNoInteractions(inventoryRepository, stockMovementRepository);
+        verify(headerRepository, never()).update(any(), any());
     }
 
     @Test
-    @DisplayName("rejects an order mixing CONFIRMED and RESERVED reservations, without writing anything")
-    void shouldRejectMixOfConfirmedAndReserved() {
-        StockReservation confirmed = buildReservation(1L, inventoryId, 10L, ReservationStatus.CONFIRMED);
-        StockReservation reserved = buildReservation(2L, 20L);
+    @DisplayName("header CANCELLED (released, or tombstone): ORDER_CLOSED")
+    void closedByRelease() {
+        existingHeader(OrderReservationStatus.CANCELLED);
+        lines(view(1, item1, LOW, 2, ReservationStatus.RELEASED));
 
-        when(stockReservationRepository.getByOrderId(orderId)).thenReturn(List.of(confirmed, reserved));
+        ConfirmStockReservationResult result = service.confirm(cmd());
 
-        assertThrows(InvalidReservationStateException.class,
-                () -> confirmStockReservationService.confirm(buildCmd()));
-
-        verify(stockReservationRepository, never()).markConfirmed(any());
-        verifyNoInteractions(inventoryRepository);
+        assertThat(result).isEqualTo(new ConfirmStockReservationResult.ConfirmationFailed(Reason.ORDER_CLOSED,
+                List.of(new ReservationLineStatus(item1, ReservationStatus.RELEASED))));
+        verifyNoInteractions(inventoryRepository, stockMovementRepository);
     }
 
     @Test
-    @DisplayName("throws and does not touch inventory when a reservation was changed concurrently (guarded update lost)")
-    void shouldThrowWhenGuardedTransitionLost() {
-        StockReservation r1 = buildReservation(1L, 10L);
-        StockReservation r2 = buildReservation(2L, 20L);
+    @DisplayName("header REJECTED: ORDER_CLOSED without lines")
+    void closedByRejection() {
+        existingHeader(OrderReservationStatus.REJECTED);
+        lines();
 
-        when(stockReservationRepository.getByOrderId(orderId)).thenReturn(List.of(r1, r2));
-        when(stockReservationRepository.markConfirmed(any())).thenReturn(idsOf(r1));
+        ConfirmStockReservationResult result = service.confirm(cmd());
 
-        InvalidReservationStateException ex = assertThrows(InvalidReservationStateException.class,
-                () -> confirmStockReservationService.confirm(buildCmd()));
-
-        assertTrue(ex.getMessage().contains("modified concurrently"));
-        verify(inventoryRepository, never()).confirm(any(), anyLong());
+        assertThat(result).isEqualTo(new ConfirmStockReservationResult.ConfirmationFailed(Reason.ORDER_CLOSED, List.of()));
     }
 
     @Test
-    @DisplayName("throws ValidationException when no reservations found for order")
-    void shouldThrowWhenNoReservationsFound() {
-        when(stockReservationRepository.getByOrderId(orderId)).thenReturn(Collections.emptyList());
+    @DisplayName("one line EXPIRED: NOT_RESERVED for the whole order, nothing written")
+    void oneLineExpired() {
+        existingHeader(OrderReservationStatus.RESERVED);
+        lines(view(1, item1, LOW, 2, ReservationStatus.RESERVED), view(2, item2, HIGH, 1, ReservationStatus.EXPIRED));
 
-        assertThrows(ValidationException.class,
-                () -> confirmStockReservationService.confirm(buildCmd()));
-        verify(stockReservationRepository, never()).markConfirmed(any());
-        verify(inventoryRepository, never()).confirm(any(), anyLong());
+        ConfirmStockReservationResult result = service.confirm(cmd());
+
+        assertThat(result).isEqualTo(new ConfirmStockReservationResult.ConfirmationFailed(Reason.NOT_RESERVED, List.of(
+                new ReservationLineStatus(item1, ReservationStatus.RESERVED),
+                new ReservationLineStatus(item2, ReservationStatus.EXPIRED))));
+        verify(stockReservationRepository, never()).markConfirmed(anyCollection());
+        verifyNoInteractions(inventoryRepository, stockMovementRepository);
+        verify(headerRepository, never()).update(any(), any());
     }
 
     @Test
-    @DisplayName("throws InvalidReservationException when inventory atomic update returns 0")
-    void shouldThrowWhenInventoryConfirmFails() {
-        StockReservation reservation = buildReservation(1L, 30L);
+    @DisplayName("header RESERVED but no lines: NOT_RESERVED")
+    void reservedHeaderWithoutLines() {
+        existingHeader(OrderReservationStatus.RESERVED);
+        lines();
 
-        when(stockReservationRepository.getByOrderId(orderId)).thenReturn(List.of(reservation));
-        when(stockReservationRepository.markConfirmed(any())).thenReturn(idsOf(reservation));
-        when(inventoryRepository.confirm(inventoryId, 30L)).thenReturn(0);
+        ConfirmStockReservationResult result = service.confirm(cmd());
 
-        assertThrows(InvalidReservationException.class,
-                () -> confirmStockReservationService.confirm(buildCmd()));
+        assertThat(result).isEqualTo(new ConfirmStockReservationResult.ConfirmationFailed(Reason.NOT_RESERVED, List.of()));
+    }
+
+    @Test
+    @DisplayName("a line expired concurrently (guarded update lost): throws before touching inventory")
+    void lostAgainstExpiry() {
+        existingHeader(OrderReservationStatus.RESERVED);
+        lines(view(1, item1, LOW, 2, ReservationStatus.RESERVED), view(2, item2, HIGH, 1, ReservationStatus.RESERVED));
+        when(stockReservationRepository.markConfirmed(anyList())).thenReturn(Set.of(StockReservationId.of(1L)));
+
+        assertThrows(InvalidReservationStateException.class, () -> service.confirm(cmd()));
+        verifyNoInteractions(inventoryRepository, stockMovementRepository);
+        verify(headerRepository, never()).update(any(), any());
+    }
+
+    @Test
+    @DisplayName("inventory guarded confirm returns 0: throws, no movement")
+    void inventoryConfirmFails() {
+        existingHeader(OrderReservationStatus.RESERVED);
+        lines(view(1, item1, LOW, 2, ReservationStatus.RESERVED));
+        when(stockReservationRepository.markConfirmed(anyList())).thenReturn(Set.of(StockReservationId.of(1L)));
+        when(inventoryRepository.confirm(LOW, 2L)).thenReturn(0);
+
+        assertThrows(InvalidReservationException.class, () -> service.confirm(cmd()));
+        verifyNoInteractions(stockMovementRepository);
+    }
+
+    @Test
+    @DisplayName("fewer SALE movements than lines: throws")
+    void movementShortfall() {
+        existingHeader(OrderReservationStatus.RESERVED);
+        lines(view(1, item1, LOW, 2, ReservationStatus.RESERVED));
+        when(stockReservationRepository.markConfirmed(anyList())).thenReturn(Set.of(StockReservationId.of(1L)));
+        when(inventoryRepository.confirm(LOW, 2L)).thenReturn(1);
+        when(stockMovementRepository.insertForReservations(anyList(), any(), any(), any())).thenReturn(0);
+
+        assertThrows(IllegalStateException.class, () -> service.confirm(cmd()));
+        verify(headerRepository, never()).update(any(), any());
     }
 }

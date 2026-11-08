@@ -2,7 +2,9 @@ package com.dotran.oms.inventory.application.repository;
 
 import com.dotran.oms.inventory.common.id.StockReservationId;
 import com.dotran.oms.inventory.domain.model.StockReservation;
+import com.dotran.oms.core.domain.id.MerchantId;
 import com.dotran.oms.core.domain.id.OrderId;
+import com.dotran.oms.core.domain.id.StoreId;
 
 import java.time.Instant;
 import java.util.Collection;
@@ -24,7 +26,17 @@ public interface StockReservationRepository {
      */
     Set<StockReservationId> markExpired(Collection<StockReservationId> stockReservationIds);
 
-    List<StockReservation> getByOrderId(OrderId orderId);
+    /**
+     * Reservations of one order, scoped by merchant and store, with SKU and product, read with native SQL so the status
+     * is current even after native guarded transitions in the same transaction. Ordered by reservation id.
+     */
+    List<ReservationLineView> getLineViews(MerchantId merchantId, StoreId storeId, OrderId orderId);
+
+    /** Guarded {@code RESERVED -> RELEASED}, ascending id order, inside the caller's transaction; returns the winners. */
+    Set<StockReservationId> markReleased(Collection<StockReservationId> stockReservationIds);
+
+    /** Guarded {@code CONFIRMED -> RETURNED}, ascending id order, inside the caller's transaction; returns the winners. */
+    Set<StockReservationId> markReturned(Collection<StockReservationId> stockReservationIds);
 
     /**
      * Guarded transition {@code RESERVED -> CONFIRMED}, one conditional UPDATE per reservation in ascending id order.

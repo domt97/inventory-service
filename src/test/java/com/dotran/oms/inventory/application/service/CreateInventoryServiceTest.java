@@ -79,7 +79,7 @@ class CreateInventoryServiceTest {
     }
 
     @Test
-    @DisplayName("initializes each inventory with zero quantity and ACTIVE status")
+    @DisplayName("initializes each inventory with zero quantity and INACTIVE status (support row, not orderable)")
     void shouldInitializeInventoriesWithZeroQuantity() {
         SKU sku = SKU.of("SKU-001");
 
@@ -102,7 +102,7 @@ class CreateInventoryServiceTest {
         Inventory inventory = created.get(0);
         assertEquals(0L, inventory.getQuantity());
         assertEquals(0L, inventory.getReservedQuantity());
-        assertEquals(InventoryStatus.ACTIVE, inventory.getStatus());
+        assertEquals(InventoryStatus.INACTIVE, inventory.getStatus());
         assertEquals(sku, inventory.getSku());
         assertEquals(merchantId, inventory.getMerchantId());
         assertEquals(storeId, inventory.getStoreId());

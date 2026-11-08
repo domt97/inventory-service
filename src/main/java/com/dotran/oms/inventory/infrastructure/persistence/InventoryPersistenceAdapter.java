@@ -1,6 +1,7 @@
 package com.dotran.oms.inventory.infrastructure.persistence;
 
 import com.dotran.oms.inventory.application.repository.InventoryRepository;
+import com.dotran.oms.inventory.application.repository.StockState;
 import com.dotran.oms.inventory.domain.enums.InventoryStatus;
 import com.dotran.oms.inventory.domain.model.Inventory;
 import com.dotran.oms.inventory.infrastructure.mapper.InventoryPersistenceMapper;
@@ -143,8 +144,35 @@ public class InventoryPersistenceAdapter implements InventoryRepository {
     }
 
     @Override
-    public int reserve(InventoryId inventoryId, Long quantity) {
-        return springDataInventoryRepository.reserve(inventoryId.getValue(), quantity);
+    public List<Inventory> getByMerchantStoreAndSkus(MerchantId merchantId, StoreId storeId, Collection<SKU> skus) {
+        if (skus.isEmpty()) {
+            return List.of();
+        }
+        return springDataInventoryRepository
+                .findAllByMerchantIdAndStoreIdAndSkuIn(merchantId.getValue(), storeId.getValue(),
+                        skus.stream().map(SKU::getValue).distinct().toList())
+                .stream()
+                .map(mapper::fromEntity)
+                .toList();
+    }
+
+    @Override
+    public int reserve(InventoryId inventoryId, MerchantId merchantId, StoreId storeId, long quantity) {
+        return springDataInventoryRepository.reserve(inventoryId.getValue(), merchantId.getValue(),
+                storeId.getValue(), quantity);
+    }
+
+    @Override
+    public List<StockState> getStockStates(Collection<InventoryId> inventoryIds) {
+        if (inventoryIds.isEmpty()) {
+            return List.of();
+        }
+        return springDataInventoryRepository
+                .findStockStates(inventoryIds.stream().map(InventoryId::getValue).distinct().toList())
+                .stream()
+                .map(v -> new StockState(InventoryId.of(v.getId()), InventoryStatus.valueOf(v.getStatus()),
+                        v.getAvailable()))
+                .toList();
     }
 
     @Override

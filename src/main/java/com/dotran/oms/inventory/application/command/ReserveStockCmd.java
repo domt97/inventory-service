@@ -1,35 +1,37 @@
 package com.dotran.oms.inventory.application.command;
 
+import com.dotran.oms.core.domain.id.EventId;
+import com.dotran.oms.core.domain.id.MerchantId;
 import com.dotran.oms.core.domain.id.OrderId;
 import com.dotran.oms.core.domain.id.OrderItemId;
 import com.dotran.oms.core.domain.id.ProductId;
 import com.dotran.oms.core.domain.id.SKU;
 import com.dotran.oms.core.domain.id.StoreId;
-import com.dotran.oms.core.domain.id.MerchantId;
 import lombok.Builder;
-import lombok.Data;
-import lombok.Getter;
-import lombok.Setter;
+import lombok.Value;
 
+import java.time.Instant;
 import java.util.List;
 
-@Data
+/** ReserveStock command (ADR 0006): hold every line of one order, all or nothing (BR-INV-11). */
+@Value
 @Builder
 public class ReserveStockCmd {
 
-    private MerchantId merchantId;
-    private StoreId storeId;
-    private OrderId orderId;
-    private List<ReserveStockSKU> skus;
+    EventId eventId;
+    Instant occurredAt;
+    MerchantId merchantId;
+    StoreId storeId;
+    OrderId orderId;
+    List<Line> lines;
 
+    @Value
     @Builder
-    @Getter
-    @Setter
-    public static class ReserveStockSKU {
+    public static class Line {
 
-        private OrderItemId orderItemId;
-        private ProductId productId;
-        private SKU sku;
-        private long quantity;
+        OrderItemId orderItemId;
+        ProductId productId;
+        SKU sku;
+        long quantity;
     }
 }
