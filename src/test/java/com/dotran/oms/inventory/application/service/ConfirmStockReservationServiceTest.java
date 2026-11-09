@@ -13,7 +13,9 @@ import com.dotran.oms.inventory.application.config.ReservationProperties;
 import com.dotran.oms.inventory.application.dto.reservation.ConfirmStockReservationResult;
 import com.dotran.oms.inventory.application.dto.reservation.ConfirmStockReservationResult.Reason;
 import com.dotran.oms.inventory.application.dto.reservation.ReservationLineStatus;
+import com.dotran.oms.inventory.application.event.StockReplyFactory;
 import com.dotran.oms.inventory.application.repository.InventoryRepository;
+import com.dotran.oms.inventory.application.repository.OutboxEventRepository;
 import com.dotran.oms.inventory.application.repository.ReservationLineView;
 import com.dotran.oms.inventory.application.repository.StockMovementRepository;
 import com.dotran.oms.inventory.application.repository.StockReservationOrderRepository;
@@ -76,6 +78,10 @@ class ConfirmStockReservationServiceTest {
     private StockMovementRepository stockMovementRepository;
     @Mock
     private TransactionTimeoutRepository transactionTimeoutRepository;
+    @Mock
+    private OutboxEventRepository outboxEventRepository;
+    @Mock
+    private StockReplyFactory replyFactory;
 
     private ConfirmStockReservationService service;
 
@@ -90,7 +96,7 @@ class ConfirmStockReservationServiceTest {
     void setUp() {
         service = new ConfirmStockReservationService(headerRepository, stockReservationRepository,
                 inventoryRepository, stockMovementRepository, transactionTimeoutRepository,
-                new ReservationProperties());
+                new ReservationProperties(), outboxEventRepository, replyFactory);
     }
 
     private ConfirmStockReservationCmd cmd() {
@@ -158,6 +164,8 @@ class ConfirmStockReservationServiceTest {
                 new ReservationLineStatus(item1, ReservationStatus.CONFIRMED),
                 new ReservationLineStatus(item2, ReservationStatus.CONFIRMED),
                 new ReservationLineStatus(item3, ReservationStatus.CONFIRMED))));
+
+        verify(outboxEventRepository).saveAll(anyList());
     }
 
     @Test
@@ -173,6 +181,8 @@ class ConfirmStockReservationServiceTest {
         assertThat(result).isEqualTo(new ConfirmStockReservationResult.ConfirmationFailed(Reason.UNKNOWN_ORDER, List.of()));
         verifyNoInteractions(stockReservationRepository, inventoryRepository, stockMovementRepository);
         verify(headerRepository, never()).update(any(), any());
+
+        verify(outboxEventRepository).saveAll(anyList());
     }
 
     @Test
@@ -183,6 +193,8 @@ class ConfirmStockReservationServiceTest {
 
         assertThrows(StockCommandOwnershipMismatchException.class, () -> service.confirm(cmd()));
         verifyNoInteractions(stockReservationRepository, inventoryRepository, stockMovementRepository);
+
+        verify(outboxEventRepository, never()).saveAll(anyList());
     }
 
     @Test
@@ -194,6 +206,8 @@ class ConfirmStockReservationServiceTest {
 
         assertThrows(InvalidStockCommandException.class, () -> service.confirm(cmd));
         verifyNoInteractions(headerRepository, transactionTimeoutRepository);
+
+        verify(outboxEventRepository, never()).saveAll(anyList());
     }
 
     @Test
@@ -209,6 +223,8 @@ class ConfirmStockReservationServiceTest {
         verify(stockReservationRepository, never()).markConfirmed(anyCollection());
         verifyNoInteractions(inventoryRepository, stockMovementRepository);
         verify(headerRepository, never()).update(any(), any());
+
+        verify(outboxEventRepository).saveAll(anyList());
     }
 
     @Test
@@ -222,6 +238,8 @@ class ConfirmStockReservationServiceTest {
         assertThat(result).isEqualTo(new ConfirmStockReservationResult.ConfirmationFailed(Reason.ORDER_CLOSED,
                 List.of(new ReservationLineStatus(item1, ReservationStatus.RELEASED))));
         verifyNoInteractions(inventoryRepository, stockMovementRepository);
+
+        verify(outboxEventRepository).saveAll(anyList());
     }
 
     @Test
@@ -233,6 +251,8 @@ class ConfirmStockReservationServiceTest {
         ConfirmStockReservationResult result = service.confirm(cmd());
 
         assertThat(result).isEqualTo(new ConfirmStockReservationResult.ConfirmationFailed(Reason.ORDER_CLOSED, List.of()));
+
+        verify(outboxEventRepository).saveAll(anyList());
     }
 
     @Test
@@ -249,6 +269,8 @@ class ConfirmStockReservationServiceTest {
         verify(stockReservationRepository, never()).markConfirmed(anyCollection());
         verifyNoInteractions(inventoryRepository, stockMovementRepository);
         verify(headerRepository, never()).update(any(), any());
+
+        verify(outboxEventRepository).saveAll(anyList());
     }
 
     @Test
@@ -260,6 +282,8 @@ class ConfirmStockReservationServiceTest {
         ConfirmStockReservationResult result = service.confirm(cmd());
 
         assertThat(result).isEqualTo(new ConfirmStockReservationResult.ConfirmationFailed(Reason.NOT_RESERVED, List.of()));
+
+        verify(outboxEventRepository).saveAll(anyList());
     }
 
     @Test
@@ -272,6 +296,8 @@ class ConfirmStockReservationServiceTest {
         assertThrows(InvalidReservationStateException.class, () -> service.confirm(cmd()));
         verifyNoInteractions(inventoryRepository, stockMovementRepository);
         verify(headerRepository, never()).update(any(), any());
+
+        verify(outboxEventRepository, never()).saveAll(anyList());
     }
 
     @Test
@@ -284,6 +310,8 @@ class ConfirmStockReservationServiceTest {
 
         assertThrows(InvalidReservationException.class, () -> service.confirm(cmd()));
         verifyNoInteractions(stockMovementRepository);
+
+        verify(outboxEventRepository, never()).saveAll(anyList());
     }
 
     @Test
@@ -297,5 +325,7 @@ class ConfirmStockReservationServiceTest {
 
         assertThrows(IllegalStateException.class, () -> service.confirm(cmd()));
         verify(headerRepository, never()).update(any(), any());
+
+        verify(outboxEventRepository, never()).saveAll(anyList());
     }
 }

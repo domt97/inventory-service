@@ -33,7 +33,7 @@ public class ReservationProperties {
 
     /** Most lines one reserve may hold (BR-INV-11). */
     @Min(1)
-    @Max(100)
+    @Max(100) // also the reply schemas' lines.maxItems (StockReserved, StockReservationExpired …): raise both together
     private int maxLines = 100;
 
     /** Clock difference tolerated by the stale-command check (BR-INV-11). */

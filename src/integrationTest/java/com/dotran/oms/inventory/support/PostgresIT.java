@@ -5,7 +5,11 @@ import com.dotran.oms.inventory.application.service.ConfirmStockReservationServi
 import com.dotran.oms.inventory.application.service.ExpireByInventoryTransaction;
 import com.dotran.oms.inventory.application.service.ReleaseStockReservationService;
 import com.dotran.oms.inventory.application.service.ReserveStockService;
+import com.dotran.oms.core.logging.MdcProperties;
+import com.dotran.oms.core.logging.MdcPropagation;
+import com.dotran.oms.inventory.application.event.StockReplyFactory;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -47,7 +51,10 @@ public abstract class PostgresIT {
     private static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16-alpine")
             .withDatabaseName("inventory")
             .withUsername("postgres")
-            .withPassword("postgres");
+            .withPassword("postgres")
+            // wal_level=logical: the outbox ITs read the WAL with a test_decoding slot (WalSlot), as Debezium would.
+            // withCommand replaces the image default, so keep fsync=off.
+            .withCommand("postgres", "-c", "fsync=off", "-c", "wal_level=logical");
 
     static {
         // Started once per JVM, stopped by Testcontainers' Ryuk at the end of the run.
@@ -75,7 +82,7 @@ public abstract class PostgresIT {
 
     @BeforeEach
     void truncate() {
-        jdbc.execute("TRUNCATE TABLE stock_movements, stock_reservations, stock_reservation_orders, inventories, "
+        jdbc.execute("TRUNCATE TABLE outbox_events, stock_movements, stock_reservations, stock_reservation_orders, inventories, "
                 + "product_catalog_versions");
     }
 
@@ -110,7 +117,7 @@ public abstract class PostgresIT {
     })
     @EnableConfigurationProperties(ReservationProperties.class)
     @Import({ReserveStockService.class, ConfirmStockReservationService.class, ReleaseStockReservationService.class,
-            ExpireByInventoryTransaction.class})
+            ExpireByInventoryTransaction.class, StockReplyFactory.class, MdcProperties.class, MdcPropagation.class})
     static class Config {
 
         @Bean
@@ -120,7 +127,7 @@ public abstract class PostgresIT {
 
         @Bean
         ObjectMapper objectMapper() {
-            return new ObjectMapper();
+            return new ObjectMapper().registerModule(new JavaTimeModule());
         }
 
         @Bean
