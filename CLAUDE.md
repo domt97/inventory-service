@@ -10,8 +10,10 @@ Stock truth per (store, SKU): quantity, reservations for orders, and an audit tr
 Postgres DB `inventory`, schema `inventory`; no DynamoDB (merchant id arrives with `ProductCreated`). Port **8058**.
 Consumes `ProductCreated` and `ProductUpdated` (Kafka, through `SyncProductInventoryService`) and a reservation-expire tick (EventBridge → SQS, every minute).
 Failed Kafka records go to `<topic>.DLT` (`KafkaErrorHandlingConfig`).
-Publishes nothing yet (no outbox table). The stock commands of ADR 0006 (reserve, confirm, release) are built as use
-cases returning results; their Kafka entry points and replies come in later PRs.
+Publishes the stock replies of ADR 0006 (`StockReserved`, `StockReservationRejected`, `StockReservationConfirmed`,
+`StockReservationConfirmationFailed`, `StockReservationReleased`, `StockReservationExpired`) through `outbox_events`;
+not live until the connector `inventory-outbox-cdc` (`development` repo) exists. The commands (reserve, confirm,
+release) are use cases without a Kafka entry point yet.
 
 ## Layout (`com.dotran.oms.inventory`)
 
@@ -22,6 +24,7 @@ cases returning results; their Kafka entry points and replies come in later PRs.
 | Application | `application/usecase/{inventory,reservation,movement}` | Inbound ports `XxxUseCase` |
 | | `application/service` | `@UseCase` implementations (flat package), `@Transactional` here |
 | | `application/command`, `dto`, `repository`, `jobs` | `XxxCmd`, `XxxDto`, outbound ports |
+| | `application/event` | `StockReply` (reply payloads, plain values only), `OutboxMessage`, `StockReplyFactory` |
 | | `application/config` | `@ConfigurationProperties` used by use cases (`ReservationExpiryProperties`, `ReservationProperties`) |
 | Infrastructure | `infrastructure/rest/{api,internal,dto,mapper,exception}` | Public controllers under `/v1/inventory/inventories`; internal controller under `/internal/v1/inventory/inventories` (`@Hidden`); `InventoryExceptionHandler` |
 | | `infrastructure/persistence/{entity,jpa}` | Adapters, entities, `SpringDataXxxRepository` (native SQL for stock updates) |
@@ -62,6 +65,15 @@ cases returning results; their Kafka entry points and replies come in later PRs.
   reservations in the required status, `reference_type = ORDER_ITEM`, `reference_id` = order item, `reservation_id` set,
   `ON CONFLICT (reservation_id, type) DO NOTHING`). Commands check the count and throw on a shortfall; the expiry only
   logs it. The hold types are refused by a manual adjust (`InvalidMovementTypeException`, 400); a manual `SALE` is allowed.
+- **Replies go to the outbox in the same transaction, from one write point.** Reserve / confirm / release:
+  `result = decide(cmd); outbox.saveAll(replyFactory.of(cmd, result)); return result` — every return publishes
+  (duplicates and tombstones too, a new eventId each time, `causationId` = the command's eventId), every throw
+  publishes nothing. The expiry publishes one `StockReservationExpired` per (order, merchant, store) after its
+  movements; the expiry's reply mapping never throws (a database failure in `saveAll` still rolls that inventory back
+  and the next tick retries it). `OutboxEventPersistenceAdapter` inserts the rows with `id = eventId` and **deletes
+  them in the same transaction**: Debezium reads the INSERTs from the WAL, the table stays empty (open question 19).
+  Payloads are plain JSON (`OutboxPayloadSerializer`: ISO instants, nulls written); never put typed ids in them.
+  The six reply schemas are copied in `src/contractTest/resources/contracts/events` — keep them in sync.
 - Expiry runs per inventory in its own transaction (`ExpireByInventoryTransaction`, `REQUIRES_NEW`) so one failure does not roll back others;
   `ExpireStockReservationService` catches any `RuntimeException` per inventory, logs `Reservation expiry failed for inventory {}` and continues
   (the rolled-back reservations stay `RESERVED` and are retried on the next tick; the SQS message is still acknowledged).
@@ -120,7 +132,7 @@ cases returning results; their Kafka entry points and replies come in later PRs.
 4. **Audit**: write a `StockMovement` with the right `StockMovementType`, `reference_type` and `reference_id` for every quantity change.
 5. **Entry point**: REST controller or a consumer in `infrastructure/message`. Consumers map the external DTO to a command and must be **idempotent** (Kafka delivery is at-least-once).
 6. **Errors**: map in `InventoryExceptionHandler` (extends `oms-core` `GlobalExceptionHandler`).
-7. **Migration**: `src/main/resources/db/migration/V<next>__<what>.sql` (latest is `V4`); every table has `merchant_id`.
+7. **Migration**: `src/main/resources/db/migration/V<next>__<what>.sql` (latest is `V5`); every table has `merchant_id`.
 8. **Tests** mirroring the package: domain, service, adapter, controller/consumer.
 
 ## Tests
@@ -130,7 +142,7 @@ cases returning results; their Kafka entry points and replies come in later PRs.
 - **Integration tests** (`src/integrationTest`, Gradle suite `integrationTest`, Docker needed): Testcontainers
   `postgres:16-alpine`, Flyway V1..Vn, the JPA slice with the persistence adapters and the stock command services
   (`support/PostgresIT`; no Kafka/SQS). They cover the native SQL, constraints, JSONB, `FOR UPDATE`, lock timeouts and
-  races, transaction timeouts (`StockSqlIT`, `StockCommandsIT`, `StockConcurrencyIT`, `StockCommandTransactionIT`). Run: `./gradlew integrationTest`; CI job `Integration tests`
+  races, transaction timeouts, and the outbox as Debezium would see it in the WAL (a `test_decoding` slot, `support/WalSlot`; the container runs with `wal_level=logical`) (`StockSqlIT`, `StockCommandsIT`, `StockConcurrencyIT`, `StockCommandTransactionIT`, `OutboxSqlIT`, `StockRepliesIT`, `OutboxFailureIT`). Run: `./gradlew integrationTest`; CI job `Integration tests`
   (not a required check yet). Any change to native SQL or locking needs an IT here.
 
 ## Git workflow
@@ -151,7 +163,8 @@ Infra from the `development` repo (Postgres, Kafka, LocalStack with SQS queue + 
 
 - Kafka DLT topics (`ProductCreated.DLT`, `ProductUpdated.DLT`) have no alerting and no replay tool; records there are only visible as an ERROR log. SQS `reservation-expire` has no DLQ.
 - The internal `POST /internal/v1/inventory/inventories` (`CreateInventoryService`, kept for support, no caller today) bypasses the catalog version gate and creates **INACTIVE** rows (not orderable, BR-INV-08). Such a row becomes orderable only through a later `ProductUpdated` of that product, and only if the request's `productId` owns the SKU in the catalog (otherwise the sync skips it as claimed by another product and it stays INACTIVE); `ProductCreated` (also from a DLT replay) never changes an existing row, so support makes it sellable by changing the product in stores-service. A row in another merchant or store makes every later event of that product go to the DLT. It inserts in request order (not sorted by SKU), so it can deadlock with the sync; Postgres aborts one side and the sync is retried. Stock can still be adjusted on an INACTIVE row (BR-INV-10).
-- The stock commands have no entry point yet (Kafka consumers and the outbox replies come in later PRs); `OrderCreatedEventConsumer` is commented out.
+- The stock commands have no entry point yet (Kafka consumers come after the connector); `OrderCreatedEventConsumer` is commented out.
+- The replies are not published until the connector `inventory-outbox-cdc` exists: rows written before its slot exists are never published (only the expiry can write them today).
 - Order headers (`stock_reservation_orders`) are never cleaned up (one row per order).
 - REST endpoints take no `merchantId` (stores-service uses `/v1/store/merchants/{merchantId}/...`); `Inventory.validateMerchantAndStore` exists but merchant scoping of the API is undecided.
 - `ProductCreatedEvent` and `ProductUpdatedEvent` DTOs duplicate the producer's classes in stores-service — keep both in sync with `oms-workspace/architecture/contracts/events/*.schema.json`.

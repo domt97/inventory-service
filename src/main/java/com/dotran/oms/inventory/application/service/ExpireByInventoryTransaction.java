@@ -1,7 +1,9 @@
 package com.dotran.oms.inventory.application.service;
 
 import com.dotran.oms.core.util.CollectionUtils;
+import com.dotran.oms.inventory.application.event.StockReplyFactory;
 import com.dotran.oms.inventory.application.repository.InventoryRepository;
+import com.dotran.oms.inventory.application.repository.OutboxEventRepository;
 import com.dotran.oms.inventory.application.repository.StockMovementRepository;
 import com.dotran.oms.inventory.application.repository.StockReservationRepository;
 import com.dotran.oms.inventory.common.id.StockReservationId;
@@ -29,6 +31,8 @@ public class ExpireByInventoryTransaction {
     private final StockReservationRepository stockReservationRepository;
     private final InventoryRepository inventoryRepository;
     private final StockMovementRepository stockMovementRepository;
+    private final OutboxEventRepository outboxEventRepository;
+    private final StockReplyFactory replyFactory;
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void execute(InventoryId inventoryId, List<StockReservation> expiredReservations) {
@@ -82,6 +86,10 @@ public class ExpireByInventoryTransaction {
             log.warn("Wrote {} RESERVE_EXPIRE movements for {} expired reservations of inventory {}",
                     movements, winnerIds.size(), inventoryId);
         }
+
+        // StockReservationExpired, one per (order, merchant, store) of the reservations this transaction expired.
+        // The mapping never throws; a database failure here rolls this inventory back and the next tick retries it.
+        outboxEventRepository.saveAll(replyFactory.expired(updatedReservations, inventory.getSku()));
 
         log.info("Expired {} reservations and released {} quantity for inventory {}",
                 updatedReservations.size(), releaseQuantity, inventoryId);

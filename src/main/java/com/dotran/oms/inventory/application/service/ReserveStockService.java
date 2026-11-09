@@ -7,7 +7,9 @@ import com.dotran.oms.core.domain.id.SKU;
 import com.dotran.oms.inventory.application.command.ReserveStockCmd;
 import com.dotran.oms.inventory.application.config.ReservationProperties;
 import com.dotran.oms.inventory.application.dto.reservation.ReserveStockResult;
+import com.dotran.oms.inventory.application.event.StockReplyFactory;
 import com.dotran.oms.inventory.application.repository.InventoryRepository;
+import com.dotran.oms.inventory.application.repository.OutboxEventRepository;
 import com.dotran.oms.inventory.application.repository.ReservationLineView;
 import com.dotran.oms.inventory.application.repository.StockMovementRepository;
 import com.dotran.oms.inventory.application.repository.StockReservationOrderRepository;
@@ -37,6 +39,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -66,11 +69,21 @@ public class ReserveStockService implements ReserveStockUseCase {
     private final StockMovementRepository stockMovementRepository;
     private final TransactionTimeoutRepository transactionTimeoutRepository;
     private final ReservationProperties properties;
+    private final OutboxEventRepository outboxEventRepository;
+    private final StockReplyFactory replyFactory;
     private final Clock clock;
 
     @Override
     @Transactional(timeoutString = ReservationProperties.TRANSACTION_TIMEOUT)
     public ReserveStockResult reserve(ReserveStockCmd cmd) {
+        // One write point: every decision that returns publishes its reply in this transaction (duplicates too,
+        // BR-INV-07); anything that throws rolls back and publishes nothing.
+        ReserveStockResult result = decide(cmd);
+        outboxEventRepository.saveAll(replyFactory.of(cmd, result));
+        return result;
+    }
+
+    private ReserveStockResult decide(ReserveStockCmd cmd) {
         StockCommandValidation.requireCommon(cmd.getEventId(), cmd.getOccurredAt(), cmd.getMerchantId(),
                 cmd.getStoreId(), cmd.getOrderId());
         StockCommandValidation.requireLines(cmd.getLines(), properties.getMaxLines());
@@ -89,7 +102,8 @@ public class ReserveStockService implements ReserveStockUseCase {
             return answerDuplicate(cmd, header);
         }
 
-        Instant now = clock.instant();
+        // Microseconds, as Postgres stores expires_at: a duplicate's answer (read back) equals the original's.
+        Instant now = clock.instant().truncatedTo(ChronoUnit.MICROS);
         Duration age = Duration.between(cmd.getOccurredAt(), now);
         if (age.compareTo(properties.getTtl().plus(properties.getClockSkewTolerance())) > 0) {
             log.warn("Rejecting stale ReserveStock for order {}: {} old", cmd.getOrderId().getValue(), age);

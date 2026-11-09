@@ -81,6 +81,8 @@ dependencies {
 	annotationProcessor "org.hibernate.orm:hibernate-jpamodelgen:6.4.0.Final"
 
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
+	// JSON Schema 2020-12 validation of the outbox payloads against the copied contracts (src/contractTest/resources).
+	testImplementation 'com.networknt:json-schema-validator:1.5.7'
 	testCompileOnly 'org.projectlombok:lombok'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 	testAnnotationProcessor 'org.projectlombok:lombok'
@@ -89,6 +91,9 @@ dependencies {
 tasks.named('test') {
 	useJUnitPlatform()
 }
+
+// The copied reply schemas (contracts/events/*.schema.json) are on the classpath of the unit and integration tests.
+sourceSets.test.resources.srcDir 'src/contractTest/resources'
 
 // Testcontainers 1.21.4 works with recent Docker Engine releases; the Boot 3.2.3 BOM would pick 1.19.x.
 ext['testcontainers.version'] = '1.21.4'
@@ -104,9 +109,15 @@ testing {
 				implementation 'org.springframework.boot:spring-boot-starter-test'
 				implementation 'org.testcontainers:postgresql'
 				implementation 'org.testcontainers:junit-jupiter'
+				implementation 'com.networknt:json-schema-validator:1.5.7'
 				compileOnly 'org.projectlombok:lombok'
 				annotationProcessor 'org.projectlombok:lombok'
 				runtimeOnly 'org.junit.platform:junit-platform-launcher'
+			}
+			sources {
+				resources {
+					srcDir 'src/contractTest/resources'
+				}
 			}
 			targets {
 				all {

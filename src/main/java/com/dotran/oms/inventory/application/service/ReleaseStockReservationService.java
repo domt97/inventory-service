@@ -5,7 +5,9 @@ import com.dotran.oms.core.domain.id.InventoryId;
 import com.dotran.oms.inventory.application.command.ReleaseStockReservationCmd;
 import com.dotran.oms.inventory.application.config.ReservationProperties;
 import com.dotran.oms.inventory.application.dto.reservation.ReleaseStockReservationResult;
+import com.dotran.oms.inventory.application.event.StockReplyFactory;
 import com.dotran.oms.inventory.application.repository.InventoryRepository;
+import com.dotran.oms.inventory.application.repository.OutboxEventRepository;
 import com.dotran.oms.inventory.application.repository.ReservationLineView;
 import com.dotran.oms.inventory.application.repository.StockMovementRepository;
 import com.dotran.oms.inventory.application.repository.StockReservationOrderRepository;
@@ -49,10 +51,20 @@ public class ReleaseStockReservationService implements ReleaseStockReservationUs
     private final StockMovementRepository stockMovementRepository;
     private final TransactionTimeoutRepository transactionTimeoutRepository;
     private final ReservationProperties properties;
+    private final OutboxEventRepository outboxEventRepository;
+    private final StockReplyFactory replyFactory;
 
     @Override
     @Transactional(timeoutString = ReservationProperties.TRANSACTION_TIMEOUT)
     public ReleaseStockReservationResult release(ReleaseStockReservationCmd cmd) {
+        // One write point: every decision that returns publishes its reply in this transaction (duplicates too,
+        // BR-INV-07); anything that throws rolls back and publishes nothing.
+        ReleaseStockReservationResult result = decide(cmd);
+        outboxEventRepository.saveAll(replyFactory.of(cmd, result));
+        return result;
+    }
+
+    private ReleaseStockReservationResult decide(ReleaseStockReservationCmd cmd) {
         StockCommandValidation.requireCommon(cmd.getEventId(), cmd.getOccurredAt(), cmd.getMerchantId(),
                 cmd.getStoreId(), cmd.getOrderId());
         StockCommandValidation.requireRelease(cmd.getRestock(), cmd.getReason());
