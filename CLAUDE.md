@@ -12,7 +12,8 @@ Consumes `ProductCreated` and `ProductUpdated` (Kafka, through `SyncProductInven
 Failed Kafka records go to `<topic>.DLT` (`KafkaErrorHandlingConfig`).
 Publishes the stock replies of ADR 0006 (`StockReserved`, `StockReservationRejected`, `StockReservationConfirmed`,
 `StockReservationConfirmationFailed`, `StockReservationReleased`, `StockReservationExpired`) through `outbox_events`;
-not live until the connector `inventory-outbox-cdc` (`development` repo) exists. The commands (reserve, confirm,
+published by the connector `inventory-outbox-cdc` (`development` repo, `docs/connectors.md`; insert-only publication,
+heartbeat table `debezium_heartbeat`). The commands (reserve, confirm,
 release) are use cases without a Kafka entry point yet.
 
 ## Layout (`com.dotran.oms.inventory`)
@@ -133,6 +134,10 @@ release) are use cases without a Kafka entry point yet.
 5. **Entry point**: REST controller or a consumer in `infrastructure/message`. Consumers map the external DTO to a command and must be **idempotent** (Kafka delivery is at-least-once).
 6. **Errors**: map in `InventoryExceptionHandler` (extends `oms-core` `GlobalExceptionHandler`).
 7. **Migration**: `src/main/resources/db/migration/V<next>__<what>.sql` (latest is `V5`); every table has `merchant_id`.
+   Exception: `inventory.debezium_heartbeat` belongs to the connector setup (`development` repo SQL script) and has no
+   `merchant_id`. It is not managed by Flyway today: do not add a migration for it while the `development` script creates
+   it (moving it is open question 55 in oms-workspace). Events go through `outbox_events`; a new table that must reach
+   Kafka needs a change to the connector setup in `development`.
 8. **Tests** mirroring the package: domain, service, adapter, controller/consumer.
 
 ## Tests
@@ -163,8 +168,8 @@ Infra from the `development` repo (Postgres, Kafka, LocalStack with SQS queue + 
 
 - Kafka DLT topics (`ProductCreated.DLT`, `ProductUpdated.DLT`) have no alerting and no replay tool; records there are only visible as an ERROR log. SQS `reservation-expire` has no DLQ.
 - The internal `POST /internal/v1/inventory/inventories` (`CreateInventoryService`, kept for support, no caller today) bypasses the catalog version gate and creates **INACTIVE** rows (not orderable, BR-INV-08). Such a row becomes orderable only through a later `ProductUpdated` of that product, and only if the request's `productId` owns the SKU in the catalog (otherwise the sync skips it as claimed by another product and it stays INACTIVE); `ProductCreated` (also from a DLT replay) never changes an existing row, so support makes it sellable by changing the product in stores-service. A row in another merchant or store makes every later event of that product go to the DLT. It inserts in request order (not sorted by SKU), so it can deadlock with the sync; Postgres aborts one side and the sync is retried. Stock can still be adjusted on an INACTIVE row (BR-INV-10).
-- The stock commands have no entry point yet (Kafka consumers come after the connector); `OrderCreatedEventConsumer` is commented out.
-- The replies are not published until the connector `inventory-outbox-cdc` exists: rows written before its slot exists are never published (only the expiry can write them today).
+- The stock commands have no entry point yet (Kafka consumers are the next step); `OrderCreatedEventConsumer` is commented out.
+- Replies are published only while the connector's slot exists: rows written before the slot was created, or while it was lost, are never published (the outbox is always empty, nothing to re-read). Only the expiry writes replies today.
 - Order headers (`stock_reservation_orders`) are never cleaned up (one row per order).
 - REST endpoints take no `merchantId` (stores-service uses `/v1/store/merchants/{merchantId}/...`); `Inventory.validateMerchantAndStore` exists but merchant scoping of the API is undecided.
 - `ProductCreatedEvent` and `ProductUpdatedEvent` DTOs duplicate the producer's classes in stores-service — keep both in sync with `oms-workspace/architecture/contracts/events/*.schema.json`.
