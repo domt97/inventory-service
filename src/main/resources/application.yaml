@@ -69,8 +69,18 @@ aws:
 
 app:
   kafka:
-    # Replication factor of the dead-letter topics (ProductCreated.DLT, ProductUpdated.DLT); 3 in production.
+    # Replication factor of the dead-letter topics (ProductCreated.DLT, ProductUpdated.DLT, ReserveStock.DLT,
+    # ConfirmStockReservation.DLT, ReleaseStockReservation.DLT); 3 in production.
     dlt-replicas: ${KAFKA_DLT_REPLICAS:1}
+    stock-commands:
+      # Listener threads per command topic (ReserveStock, ConfirmStockReservation, ReleaseStockReservation; 6 partitions
+      # each). Every thread can hold a database connection, next to 2 catalog listeners and the expiry sweep: keep
+      # 3 x concurrency + 3 below the Hikari pool (10), which also serves REST. With 1, a command that is being retried
+      # delays the other partitions of its topic on this instance.
+      # The listeners poll 5 records at a time (max.poll.records on @KafkaListener): 5 x (20 s connection wait + 10 s
+      # transaction timeout + 1 s) + a 60 s backoff = 215 s, under max.poll.interval.ms (300 s), so a slow database
+      # does not cause a rebalance. Re-check that sum when one of those settings changes.
+      concurrency: ${STOCK_COMMANDS_CONCURRENCY:1}
   reservation-expiry:
     # Reservations expired per page of the sweep.
     batch-size: ${RESERVATION_EXPIRY_BATCH_SIZE:500}
