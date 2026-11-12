@@ -3,6 +3,9 @@ package com.dotran.oms.inventory.infrastructure.config;
 import com.dotran.oms.inventory.support.TestMdc;
 import com.dotran.oms.inventory.domain.exception.CatalogOwnershipMismatchException;
 import com.dotran.oms.inventory.domain.exception.InvalidCatalogEventException;
+import com.dotran.oms.inventory.domain.exception.InvalidReservationStateException;
+import com.dotran.oms.inventory.domain.exception.InvalidStockCommandException;
+import com.dotran.oms.inventory.domain.exception.StockCommandOwnershipMismatchException;
 import com.fasterxml.jackson.core.JsonParseException;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -58,6 +61,10 @@ class KafkaErrorHandlingConfigTest {
                 new JsonParseException(null, "bad json"),
                 new InvalidCatalogEventException("bad event"),
                 new CatalogOwnershipMismatchException("other merchant"),
+                new InvalidStockCommandException("orderId is required"),
+                new StockCommandOwnershipMismatchException("other merchant"),
+                // The outbox serializer wraps a JSON failure: still a contract error, by its cause.
+                new IllegalStateException("reply not serialized", new JsonParseException(null, "bad json")),
                 new DataIntegrityViolationException("constraint")}) {
             reset(deadLetter);
 
@@ -114,6 +121,64 @@ class KafkaErrorHandlingConfigTest {
                 wrapped(new CannotAcquireLockException("deadlock")))).isFalse();
         assertThat(KafkaErrorHandlingConfig.connectionFailureBackOff().getMaxInterval())
                 .isEqualTo(KafkaErrorHandlingConfig.CONNECTION_FAILURE_MAX_INTERVAL_MS);
+    }
+
+    @Test
+    @DisplayName("stock command timeouts and a confirm lost to the expiry: bounded retries then the DLT, never a connection failure")
+    void timeouts_areRetriedThenRecovered() {
+        for (Exception cause : new Exception[]{
+                new org.springframework.dao.PessimisticLockingFailureException("lock timeout",
+                        new java.sql.SQLException("canceling statement due to lock timeout", "55P03")),
+                new org.springframework.dao.QueryTimeoutException("statement timeout",
+                        new java.sql.SQLException("canceling statement due to statement timeout", "57014")),
+                new org.springframework.transaction.TransactionTimedOutException("deadline passed"),
+                new org.springframework.orm.jpa.JpaSystemException(
+                        new org.hibernate.TransactionException("transaction timeout expired")),
+                // What Spring JDBC makes of 57014 on the outbox INSERT (StockCommandErrorClassificationIT).
+                new org.springframework.dao.DataAccessResourceFailureException("outbox insert",
+                        new java.sql.SQLException("canceling statement due to statement timeout", "57014")),
+                new InvalidReservationStateException("lost to the expiry")}) {
+            reset(deadLetter);
+            DefaultErrorHandler handler = handler();
+            Exception failure = wrapped(cause);
+            String name = cause.getClass().getSimpleName();
+
+            assertThat(KafkaErrorHandlingConfig.isConnectionFailure(failure)).as(name).isFalse();
+            for (int attempt = 1; attempt <= KafkaErrorHandlingConfig.MAX_RETRIES; attempt++) {
+                assertThat(handler.handleOne(failure, record, consumer, container)).as("%s attempt %d", name, attempt).isFalse();
+            }
+            verify(deadLetter, never()).accept(any(), any());
+            assertThat(handler.handleOne(failure, record, consumer, container)).as(name).isTrue();
+            verify(deadLetter).accept(eq(record), any());
+        }
+    }
+
+    @Test
+    @DisplayName("only a cancelled statement (57014) is taken out of the connection failures: 57P01 and 08006 stay")
+    void resourceFailuresOtherThanQueryCancel_stayConnectionFailures() {
+        for (String state : new String[]{"57P01", "08006", null}) {
+            assertThat(KafkaErrorHandlingConfig.isConnectionFailure(wrapped(
+                    new org.springframework.dao.DataAccessResourceFailureException("down",
+                            new java.sql.SQLException("terminating connection", state))))).as("SQLState %s", state).isTrue();
+        }
+        // 57014 without any resource-failure exception was never one.
+        assertThat(KafkaErrorHandlingConfig.isConnectionFailure(wrapped(
+                new RuntimeException(new java.sql.SQLException("cancel", "57014"))))).isFalse();
+    }
+
+    @Test
+    @DisplayName("dead-letter topics of the stock commands: 1 partition, replicas from the property")
+    void stockCommandDeadLetterTopics() {
+        KafkaErrorHandlingConfig config = new KafkaErrorHandlingConfig();
+
+        for (org.apache.kafka.clients.admin.NewTopic topic : java.util.List.of(config.reserveStockDeadLetterTopic(3),
+                config.confirmStockReservationDeadLetterTopic(3), config.releaseStockReservationDeadLetterTopic(3))) {
+            assertThat(topic.numPartitions()).as(topic.name()).isEqualTo(1);
+            assertThat(topic.replicationFactor()).as(topic.name()).isEqualTo((short) 3);
+        }
+        assertThat(config.reserveStockDeadLetterTopic(1).name()).isEqualTo("ReserveStock.DLT");
+        assertThat(config.confirmStockReservationDeadLetterTopic(1).name()).isEqualTo("ConfirmStockReservation.DLT");
+        assertThat(config.releaseStockReservationDeadLetterTopic(1).name()).isEqualTo("ReleaseStockReservation.DLT");
     }
 
     @Test

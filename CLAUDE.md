@@ -8,13 +8,15 @@ that publishes/consumes events or depends on another service.
 
 Stock truth per (store, SKU): quantity, reservations for orders, and an audit trail of every stock change.
 Postgres DB `inventory`, schema `inventory`; no DynamoDB (merchant id arrives with `ProductCreated`). Port **8058**.
-Consumes `ProductCreated` and `ProductUpdated` (Kafka, through `SyncProductInventoryService`) and a reservation-expire tick (EventBridge → SQS, every minute).
+Consumes `ProductCreated` and `ProductUpdated` (Kafka, through `SyncProductInventoryService`), the stock commands of
+ADR 0006 `ReserveStock`, `ConfirmStockReservation`, `ReleaseStockReservation` (Kafka, sent by order-service — not built
+yet; consumers `ReserveStockConsumer`, `ConfirmStockReservationConsumer`, `ReleaseStockReservationConsumer`) and a
+reservation-expire tick (EventBridge → SQS, every minute).
 Failed Kafka records go to `<topic>.DLT` (`KafkaErrorHandlingConfig`).
 Publishes the stock replies of ADR 0006 (`StockReserved`, `StockReservationRejected`, `StockReservationConfirmed`,
 `StockReservationConfirmationFailed`, `StockReservationReleased`, `StockReservationExpired`) through `outbox_events`;
 published by the connector `inventory-outbox-cdc` (`development` repo, `docs/connectors.md`; insert-only publication,
-heartbeat table `debezium_heartbeat`). The commands (reserve, confirm,
-release) are use cases without a Kafka entry point yet.
+heartbeat table `debezium_heartbeat`).
 
 ## Layout (`com.dotran.oms.inventory`)
 
@@ -29,7 +31,7 @@ release) are use cases without a Kafka entry point yet.
 | | `application/config` | `@ConfigurationProperties` used by use cases (`ReservationExpiryProperties`, `ReservationProperties`) |
 | Infrastructure | `infrastructure/rest/{api,internal,dto,mapper,exception}` | Public controllers under `/v1/inventory/inventories`; internal controller under `/internal/v1/inventory/inventories` (`@Hidden`); `InventoryExceptionHandler` |
 | | `infrastructure/persistence/{entity,jpa}` | Adapters, entities, `SpringDataXxxRepository` (native SQL for stock updates) |
-| | `infrastructure/message` (+ `dto`) | Kafka/SQS consumers = anti-corruption layer; external event DTOs live here, never in `domain` |
+| | `infrastructure/message` (+ `dto`) | Kafka/SQS consumers = anti-corruption layer; external event and command DTOs live here, never in `domain`; `StockCommandMapping` (shared mapping of the stock commands) |
 
 ## Stock invariants — read before touching stock
 
@@ -74,7 +76,32 @@ release) are use cases without a Kafka entry point yet.
   and the next tick retries it). `OutboxEventPersistenceAdapter` inserts the rows with `id = eventId` and **deletes
   them in the same transaction**: Debezium reads the INSERTs from the WAL, the table stays empty (open question 19).
   Payloads are plain JSON (`OutboxPayloadSerializer`: ISO instants, nulls written); never put typed ids in them.
-  The six reply schemas are copied in `src/contractTest/resources/contracts/events` — keep them in sync.
+  The six reply schemas and the three command schemas are copied in `src/contractTest/resources/contracts/events` —
+  keep them in sync.
+- **The command consumers only map and call** (`ReserveStockConsumer`, `ConfirmStockReservationConsumer`,
+  `ReleaseStockReservationConsumer`; groups `inventory-reserve-stock`, `inventory-confirm-stock-reservation`,
+  `inventory-release-stock-reservation`). They are not `@Transactional`, read nothing, keep no state and never catch a
+  use-case exception: idempotency is the order header's job (keyed on `orderId`, not on the command's `eventId`), a
+  business outcome is a normal return (offset committed, reply in the outbox), every exception goes to the error
+  handler. Rules of the mapping (`StockCommandMapping`):
+  - `eventType` must equal the topic's message type, else `InvalidStockCommandException`: the three payloads overlap, so
+    a release put on the confirm topic would otherwise be read as a confirm and deduct stock;
+  - a missing id becomes a **null wrapper**, never `OrderId.of(null)` (the typed ids accept null and
+    `StockCommandValidation` checks the wrapper only);
+  - `quantity` is read as a `BigDecimal` and must be a whole number (Jackson would truncate `2.7` to 2 for a `long`;
+    the decoder reads the JSON as a tree first, so a float passes through a double: `2.7` is refused, a fraction below
+    double precision such as `2.00000000000000001` is read as 2);
+    `restock` is read as an `Object` and must be a JSON boolean (Jackson would turn `1` or `"true"` into `true`);
+  - the record key is not compared with `orderId` (correctness does not depend on partition order; the header lock does it).
+  Jackson's other lenient readings are accepted and pinned by the `*CommandJsonTest` classes: an `occurredAt` number is
+  epoch **seconds**, a 24-character base64 string is read as a UUID, `quantity` `"5"` is 5.
+- **Command listener sizing**: `max.poll.records=5` on the three `@KafkaListener`s and
+  `app.kafka.stock-commands.concurrency` (default 1). Worst case per poll: 5 × (20 s Hikari connection wait + 10 s
+  transaction timeout + 1 s) + one 60 s backoff = 215 s < `max.poll.interval.ms` (300 s, Kafka default), so a slow
+  database does not cause a rebalance (an argument from the settings; a DLT publish to an unreachable broker is outside
+  it: that record is retried, not lost). Raising the concurrency needs a larger pool: keep `3 × concurrency + 3` below
+  the Hikari pool (10), which also serves REST. With concurrency 1 a command that is being retried delays the other
+  partitions of its topic on that instance. Re-check the sum when a timeout, the pool wait or the backoff changes.
 - Expiry runs per inventory in its own transaction (`ExpireByInventoryTransaction`, `REQUIRES_NEW`) so one failure does not roll back others;
   `ExpireStockReservationService` catches any `RuntimeException` per inventory, logs `Reservation expiry failed for inventory {}` and continues
   (the rolled-back reservations stay `RESERVED` and are retried on the next tick; the SQS message is still acknowledged).
@@ -100,9 +127,19 @@ release) are use cases without a Kafka entry point yet.
 - New rows go through `insertIfAbsent` (`ON CONFLICT (store_id, sku) DO NOTHING`), sorted by SKU code.
 - **Rows are never deleted** (reservations and movements reference them without FKs). Removed SKUs become INACTIVE.
 - Status = orderable (BR-INV-08): `InventoryStatus.orderable(productStatus, skuStatus, present)`.
-- Contract errors (`InvalidCatalogEventException`, JSON errors, `DataIntegrityViolationException`) and mismatches go to
-  the DLT at once. Database connection failures are retried without limit (backoff up to 1 min), so an outage only
-  delays events. Other failures are retried 6 times (~35 s plus each attempt's own time) and then sent to the DLT.
+- Error handling is the same for **every Kafka listener** (one `DefaultErrorHandler` bean, `KafkaErrorHandlingConfig`).
+  Contract errors (`InvalidCatalogEventException`, `InvalidStockCommandException`, JSON errors,
+  `DataIntegrityViolationException`) and ownership mismatches (`CatalogOwnershipMismatchException`,
+  `StockCommandOwnershipMismatchException`) go to the DLT at once. Database connection failures are retried without
+  limit (backoff up to 1 min), so an outage only delays events and commands. Other failures are retried 6 times (~35 s
+  plus each attempt's own time) and then sent to the DLT — also the timeouts of a stock command (`lock_timeout` 55P03,
+  `statement_timeout` 57014, the transaction deadline) and `InvalidReservationStateException` (a confirm or release
+  that lost to the expiry: the retry answers from the new state; never make it not-retryable).
+  **A cancelled statement (57014) is never a connection failure**: Spring JDBC translates SQLState class 57 to
+  `DataAccessResourceFailureException` (seen on the outbox INSERT, which is plain JDBC, not Hibernate), so
+  `isConnectionFailure` excludes 57014 by the cause chain (`StockCommandErrorClassificationIT`). When you add an
+  exception to the not-retryable list or widen the connection-failure check, keep the timeout cases of
+  `KafkaErrorHandlingConfigTest` and that IT green.
 - Products whose rows span several merchants or stores fail the ownership check on every event (DLT): check with
   `SELECT store_product_id FROM inventories GROUP BY 1 HAVING count(DISTINCT merchant_id) > 1 OR count(DISTINCT store_id) > 1`.
 
@@ -113,12 +150,14 @@ release) are use cases without a Kafka entry point yet.
   defaults: `merchantId`, `storeId`, `productId`, `inventoryId`, `collectionId`, `storeAvailabilityId` as UUID path variables),
   set by oms-core (`RequestIdFilter`, `MdcRequestFieldsInterceptor`). Add a key in `application.yaml`, not in code.
 - **Every Kafka listener** opens `KafkaMdc.open(record, mdcPropagation)` first and keeps its whole body inside the scope;
-  after decoding it adds `eventId`, `merchantId`, `storeId`, `productId` (always from the payload; the header carries
-  correlation keys only). The
-  commented-out `OrderCreatedEventConsumer` must do the same when enabled. `requestId` comes from the producer's
+  after decoding it adds `eventId`, `merchantId`, `storeId` and `productId` (catalog events) or `orderId` (stock
+  commands; the key is `StockCommandMapping.ORDER_ID`, oms-core `MdcKeys` has none) — always from the payload; the
+  header carries correlation keys only. The command consumers call the use case **inside** the scope: the reply's
+  `correlation_context` is captured from the MDC of the writing thread. `requestId` comes from the producer's
   `correlationContext` header (oms-core `MdcPropagation.restore`, validated; ADR 0004), so one id covers the whole flow
   from the browser's `X-Request-Id`; without a valid header it is `topic-partition-offset`. Either way it is the same on
-  every retry; the DLT recoverer (`KafkaErrorHandlingConfig`) reopens `KafkaMdc` so the DLT line carries it too. The
+  every retry; the DLT recoverer (`KafkaErrorHandlingConfig`) reopens `KafkaMdc` so the DLT line carries it too (not
+  the payload ids: for a command the order id is on the consumer's own lines, and in `key=` if the producer keyed by it). The
   error handler's own retry lines have no MDC. Tests use a real `MdcPropagation` (`support/TestMdc`), not a mock.
 - SQS listeners open an `MdcScope` with `requestId`/`sqsMessageId`; loops over independent units (e.g. expiry per inventory)
   open a nested scope per unit, with the `catch` **inside** the scope (a try-with-resources `catch` runs after `close()`).
@@ -147,7 +186,7 @@ release) are use cases without a Kafka entry point yet.
 - **Integration tests** (`src/integrationTest`, Gradle suite `integrationTest`, Docker needed): Testcontainers
   `postgres:16-alpine`, Flyway V1..Vn, the JPA slice with the persistence adapters and the stock command services
   (`support/PostgresIT`; no Kafka/SQS). They cover the native SQL, constraints, JSONB, `FOR UPDATE`, lock timeouts and
-  races, transaction timeouts, and the outbox as Debezium would see it in the WAL (a `test_decoding` slot, `support/WalSlot`; the container runs with `wal_level=logical`) (`StockSqlIT`, `StockCommandsIT`, `StockConcurrencyIT`, `StockCommandTransactionIT`, `OutboxSqlIT`, `StockRepliesIT`, `OutboxFailureIT`). Run: `./gradlew integrationTest`; CI job `Integration tests`
+  races, transaction timeouts, and the outbox as Debezium would see it in the WAL (a `test_decoding` slot, `support/WalSlot`; the container runs with `wal_level=logical`) (`StockSqlIT`, `StockCommandsIT`, `StockConcurrencyIT`, `StockCommandTransactionIT`, `OutboxSqlIT`, `StockRepliesIT`, `OutboxFailureIT`), the command consumers on the real use cases (`StockCommandConsumersIT`: JSON record in, rows and the reply in the WAL out) and the real timeout exceptions against the Kafka error handler (`StockCommandErrorClassificationIT`). Not covered by any automated test (no broker): that the listener container applies the `@KafkaListener` settings and the error handler bean, the deserializers, DLT publishing and topic creation — check by hand with `kafka-console-producer` on the local stack after a change there. Run: `./gradlew integrationTest`; CI job `Integration tests`
   (not a required check yet). Any change to native SQL or locking needs an IT here.
 
 ## Git workflow
@@ -166,10 +205,10 @@ Infra from the `development` repo (Postgres, Kafka, LocalStack with SQS queue + 
 
 ## Known gaps (do not assume these work)
 
-- Kafka DLT topics (`ProductCreated.DLT`, `ProductUpdated.DLT`) have no alerting and no replay tool; records there are only visible as an ERROR log. SQS `reservation-expire` has no DLQ.
+- Kafka DLT topics (`ProductCreated.DLT`, `ProductUpdated.DLT`, `ReserveStock.DLT`, `ConfirmStockReservation.DLT`, `ReleaseStockReservation.DLT`) have no alerting and no replay tool; records there are only visible as an ERROR log (oms-workspace open question 17). **A stock command in a DLT gets no reply**: order-service's saga notices by its timeout (ADR 0006). SQS `reservation-expire` has no DLQ.
+- The command topics have no producer yet (order-service is not built): the consumers are tested with unit and integration tests and with messages sent by hand. Locally Kafka has no ACLs; in production only order-service may write the command topics (ADR 0006).
 - The internal `POST /internal/v1/inventory/inventories` (`CreateInventoryService`, kept for support, no caller today) bypasses the catalog version gate and creates **INACTIVE** rows (not orderable, BR-INV-08). Such a row becomes orderable only through a later `ProductUpdated` of that product, and only if the request's `productId` owns the SKU in the catalog (otherwise the sync skips it as claimed by another product and it stays INACTIVE); `ProductCreated` (also from a DLT replay) never changes an existing row, so support makes it sellable by changing the product in stores-service. A row in another merchant or store makes every later event of that product go to the DLT. It inserts in request order (not sorted by SKU), so it can deadlock with the sync; Postgres aborts one side and the sync is retried. Stock can still be adjusted on an INACTIVE row (BR-INV-10).
-- The stock commands have no entry point yet (Kafka consumers are the next step); `OrderCreatedEventConsumer` is commented out.
-- Replies are published only while the connector's slot exists: rows written before the slot was created, or while it was lost, are never published (the outbox is always empty, nothing to re-read). Only the expiry writes replies today.
+- Replies are published only while the connector's slot exists: rows written before the slot was created, or while it was lost, are never published (the outbox is always empty, nothing to re-read).
 - Order headers (`stock_reservation_orders`) are never cleaned up (one row per order).
 - REST endpoints take no `merchantId` (stores-service uses `/v1/store/merchants/{merchantId}/...`); `Inventory.validateMerchantAndStore` exists but merchant scoping of the API is undecided.
 - `ProductCreatedEvent` and `ProductUpdatedEvent` DTOs duplicate the producer's classes in stores-service — keep both in sync with `oms-workspace/architecture/contracts/events/*.schema.json`.

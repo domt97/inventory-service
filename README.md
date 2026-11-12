@@ -42,7 +42,7 @@ The Inventory Service is a downstream microservice in the OMS ecosystem responsi
 ## Order Lifecycle & Inventory Flow
 
 ```
-OrderCreated
+order-service sends the command ReserveStock (Kafka, ADR 0006 in oms-workspace)
     │
     ▼
 ReserveStock          (stock held, unavailable to other orders)
@@ -153,7 +153,10 @@ All identifiers are strongly typed via the `oms-core` shared module:
 | Event | Source | Transport | Handler | Action |
 |-------|--------|-----------|---------|--------|
 | `ProductCreated` | store-service | Kafka | `ProductCreatedConsumer` | Create inventory record for new SKU |
-| `OrderCreated` | order-service | Kafka | `OrderCreatedEventConsumer` | *(in progress)* Reserve stock |
+| `ProductUpdated` | store-service | Kafka | `ProductUpdatedConsumer` | Apply the product's catalog snapshot (orderable or not) |
+| `ReserveStock` (command) | order-service *(not built yet)* | Kafka | `ReserveStockConsumer` | Hold every line of an order, all or nothing; replies `StockReserved` / `StockReservationRejected` |
+| `ConfirmStockReservation` (command) | order-service *(not built yet)* | Kafka | `ConfirmStockReservationConsumer` | Deduct the held stock; replies `StockReservationConfirmed` / `StockReservationConfirmationFailed` |
+| `ReleaseStockReservation` (command) | order-service *(not built yet)* | Kafka | `ReleaseStockReservationConsumer` | Release or return the order's stock; replies `StockReservationReleased` |
 | Reservation Expire Trigger | AWS EventBridge | SQS | `SqsReservationExpireConsumer` | Expire overdue reservations |
 
 ### Anti-Corruption Layer (ACL)
@@ -246,7 +249,10 @@ src/main/java/com/dotran/oms/inventory/
     │   └── mapper/
     └── message/                     # Event consumers (ACL)
         ├── ProductCreatedConsumer.java
-        ├── OrderCreatedEventConsumer.java
+        ├── ProductUpdatedConsumer.java
+        ├── ReserveStockConsumer.java            # stock commands (ADR 0006)
+        ├── ConfirmStockReservationConsumer.java
+        ├── ReleaseStockReservationConsumer.java
         ├── SqsReservationExpireConsumer.java
         └── dto/                     # External event DTOs (not domain events)
 ```
