@@ -4,6 +4,10 @@ Part of the OMS. System-wide map, rules and other services: **`oms-workspace`**
 (https://github.com/domt97/oms-workspace — `CLAUDE.md`, `architecture/`). Read it before any change
 that publishes/consumes events or depends on another service.
 
+Cross-repo steps are workspace skills: `change-event`, `change-api`, `add-migration`, `add-aws-resource`. How much review a
+change gets: workspace `CLAUDE.md` → *Review policy*. Branches, CI and oms-core releases in full: workspace
+`architecture/delivery.md`.
+
 ## Owns
 
 Stock truth per (store, SKU): quantity, reservations for orders, and an audit trail of every stock change.
