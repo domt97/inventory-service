@@ -78,7 +78,7 @@ heartbeat table `debezium_heartbeat`).
   publishes nothing. The expiry publishes one `StockReservationExpired` per (order, merchant, store) after its
   movements; the expiry's reply mapping never throws (a database failure in `saveAll` still rolls that inventory back
   and the next tick retries it). `OutboxEventPersistenceAdapter` inserts the rows with `id = eventId` and **deletes
-  them in the same transaction**: Debezium reads the INSERTs from the WAL, the table stays empty (open question 19).
+  them in the same transaction**: Debezium reads the INSERTs from the WAL, the table stays empty (ADR 0006).
   Payloads are plain JSON (`OutboxPayloadSerializer`: ISO instants, nulls written); never put typed ids in them.
   The six reply schemas and the three command schemas are copied in `src/contractTest/resources/contracts/events` —
   keep them in sync.
