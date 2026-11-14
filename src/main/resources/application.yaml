@@ -5,6 +5,11 @@ spring:
   application:
     name: inventory-service
 
+  # Shared settings of every OMS service (springdoc, AWS client): oms-core's application-core.yaml.
+  # A profile file wins over this file, so override those values with an environment variable or a later profile.
+  profiles:
+    include: core
+
   datasource:
     url: jdbc:postgresql://localhost:5432/inventory?currentSchema=inventory
     driver-class-name: org.postgresql.Driver
@@ -56,13 +61,7 @@ spring:
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
 aws:
-  # For local development with LocalStack
-  # endpoint: http://localhost:4566
-  region: ${AWS_REGION:eu-west-1}
-  endpoint: ${AWS_ENDPOINT:http://localhost:4566}
-  access-key: ${AWS_ACCESS_KEY:test}
-  secret-key: ${AWS_SECRET_KEY:test}
-
+  # region, endpoint, access-key and secret-key come from oms-core's application-core.yaml (profile `core`, included above).
   sqs:
     queues:
       reservation-expire: ${AWS_SQS_RESERVATION_EXPIRE_QUEUE:localdev-reservation-expire-queue}

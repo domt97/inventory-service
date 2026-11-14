@@ -206,6 +206,10 @@ change: merge it into oms-core `master` with its `version` bumped (published aut
 `gpr.user`/`gpr.key` (classic token, `read:packages`) in `~/.gradle/gradle.properties`. Never merge an `-rc` pin (`core-pin` check).
 Infra from the `development` repo (Postgres, Kafka, LocalStack with SQS queue + EventBridge rule via Terraform).
 `./gradlew bootRun --args='--spring.profiles.active=localdev'` → Swagger at `http://localhost:8058/swagger-ui.html`.
+Profile `core` is always included (`spring.profiles.include` in `application.yaml`): the springdoc and AWS client settings
+(`aws.region`, `endpoint`, `access-key`, `secret-key`) come from oms-core's `application-core.yaml`, so the OpenAPI JSON is at
+`/api-docs`. A profile file wins over `application.yaml`: override those values with an environment variable or in
+`application-localdev.yaml`, not in `application.yaml` (`CoreProfileConfigTest`).
 
 ## Known gaps (do not assume these work)
 
