@@ -13,8 +13,8 @@ change gets: workspace `CLAUDE.md` → *Review policy*. Branches, CI and oms-cor
 Stock truth per (store, SKU): quantity, reservations for orders, and an audit trail of every stock change.
 Postgres DB `inventory`, schema `inventory`; no DynamoDB (merchant id arrives with `ProductCreated`). Port **8058**.
 Consumes `ProductCreated` and `ProductUpdated` (Kafka, through `SyncProductInventoryService`), the stock commands of
-ADR 0006 `ReserveStock`, `ConfirmStockReservation`, `ReleaseStockReservation` (Kafka, sent by order-service — not built
-yet; consumers `ReserveStockConsumer`, `ConfirmStockReservationConsumer`, `ReleaseStockReservationConsumer`) and a
+ADR 0006 `ReserveStock`, `ConfirmStockReservation`, `ReleaseStockReservation` (Kafka, sent by order-service's outbox
+through `order-outbox-cdc`; consumers `ReserveStockConsumer`, `ConfirmStockReservationConsumer`, `ReleaseStockReservationConsumer`) and a
 reservation-expire tick (EventBridge → SQS, every minute).
 Failed Kafka records go to `<topic>.DLT` (`KafkaErrorHandlingConfig`).
 Publishes the stock replies of ADR 0006 (`StockReserved`, `StockReservationRejected`, `StockReservationConfirmed`,
@@ -213,8 +213,8 @@ Profile `core` is always included (`spring.profiles.include` in `application.yam
 
 ## Known gaps (do not assume these work)
 
-- Kafka DLT topics (`ProductCreated.DLT`, `ProductUpdated.DLT`, `ReserveStock.DLT`, `ConfirmStockReservation.DLT`, `ReleaseStockReservation.DLT`) have no alerting and no replay tool; records there are only visible as an ERROR log (oms-workspace open question 17). **A stock command in a DLT gets no reply**: order-service's saga notices by its timeout (ADR 0006). SQS `reservation-expire` has no DLQ.
-- The command topics have no producer yet (order-service is not built): the consumers are tested with unit and integration tests and with messages sent by hand. Locally Kafka has no ACLs; in production only order-service may write the command topics (ADR 0006).
+- Kafka DLT topics (`ProductCreated.DLT`, `ProductUpdated.DLT`, `ReserveStock.DLT`, `ConfirmStockReservation.DLT`, `ReleaseStockReservation.DLT`) have no alerting and no replay tool; records there are only visible as an ERROR log (oms-workspace open question 17). **A stock command in a DLT gets no reply**: order-service's saga notices by its timeout (a reserve) or keeps re-sending (a confirm or release, with an alert from attempt 3; ADR 0006, 0007). SQS `reservation-expire` has no DLQ.
+- The command topics' producer is order-service (`PlaceCheckout` still off until its go-live gates): no end-to-end test runs both services yet; the consumers are tested with unit and integration tests and with messages sent by hand. order-service deduplicates the replies by its order state, not by `causationId` (ADR 0006 obligation 4, amended 2026-11-22), so a re-published reply needs nothing special here. Locally Kafka has no ACLs; in production only order-service may write the command topics (ADR 0006).
 - The internal `POST /internal/v1/inventory/inventories` (`CreateInventoryService`, kept for support, no caller today) bypasses the catalog version gate and creates **INACTIVE** rows (not orderable, BR-INV-08). Such a row becomes orderable only through a later `ProductUpdated` of that product, and only if the request's `productId` owns the SKU in the catalog (otherwise the sync skips it as claimed by another product and it stays INACTIVE); `ProductCreated` (also from a DLT replay) never changes an existing row, so support makes it sellable by changing the product in stores-service. A row in another merchant or store makes every later event of that product go to the DLT. It inserts in request order (not sorted by SKU), so it can deadlock with the sync; Postgres aborts one side and the sync is retried. Stock can still be adjusted on an INACTIVE row (BR-INV-10).
 - Replies are published only while the connector's slot exists: rows written before the slot was created, or while it was lost, are never published (the outbox is always empty, nothing to re-read).
 - Order headers (`stock_reservation_orders`) are never cleaned up (one row per order).
